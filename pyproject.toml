@@ -1,0 +1,14 @@
+[project]
+name = "WildberriesBot"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram>=3.20.0.post0",
+    "alembic>=1.15.2",
+    "pydantic>=2.11.4",
+    "pydantic-settings>=2.9.1",
+    "sqlalchemy>=2.0.40",
+    "uvicorn>=0.34.2",
+    "watchfiles>=1.0.5",
+]
