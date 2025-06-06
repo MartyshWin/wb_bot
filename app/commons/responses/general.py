@@ -3,13 +3,13 @@ from ..utils.language_loader import load_language
 from app.schemas.general import ResponseModel
 # from ...schemas.general import ResponseModel
 
-class GeneralService(BaseHandlerExtensions):
+class GeneralResponse(BaseHandlerExtensions):
     def __init__(self):
         # Если будет повторяться, то можно вынести в BaseHandlerExtensions
         super().__init__()
         self.lang = {}
 
-    def start_command_response(self, code_lang: str, name: str) -> ResponseModel:
+    def start_command_response(self, user_id: int, user_name: str, code_lang: str, name: str) -> ResponseModel:
         self.lang = load_language(code_lang)
 
         return self.format_response(
