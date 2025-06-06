@@ -1,7 +1,7 @@
 from aiogram import Router, Bot, F
 from aiogram.types import Message, CallbackQuery
 
-from app.commons.services.connection import ConnectionService
+from app.commons.responses.connection import ConnectionService
 from app.keyboards.inline.general import InlineKeyboardHandler
 
 router = Router()

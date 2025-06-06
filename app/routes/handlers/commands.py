@@ -3,7 +3,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 import logging
 
-from app.commons.services.general import GeneralService
+from app.commons.responses.general import GeneralService
 from app.keyboards.inline.general import InlineKeyboardHandler
 
 router = Router()
