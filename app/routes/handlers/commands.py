@@ -21,7 +21,7 @@ async def start_command_handler(message: Message, command: CommandObject) -> Non
     try:
         # await message.answer(response['text'], reply_markup=inline.get_keyboard(response['kb']))
         user_lang = message.from_user.language_code or "unknown"
-        response = controller.start_command_response(message.from_user.id, message.from_user.username, user_lang, message.from_user.full_name)
+        response = await controller.start_command_response(message.from_user.id, message.from_user.username, user_lang)
 
         await message.answer(response.text, reply_markup=inline.get_keyboard(response.kb))
     except Exception as e:
@@ -37,7 +37,7 @@ async def invite_command_handler(message: Message, command: CommandObject) -> No
     """
     try:
         user_lang = message.from_user.language_code or "unknown"
-        response = controller.invite_command_response(user_lang)
+        response = await controller.invite_command_response(user_lang)
 
         await message.answer(response.text)
     except Exception as e:
@@ -53,7 +53,7 @@ async def help_command_handler(message: Message, command: CommandObject) -> None
     """
     try:
         user_lang = message.from_user.language_code or "unknown"
-        response = controller.help_command_response(user_lang)
+        response = await controller.help_command_response(user_lang)
 
         await message.answer(response.text)
     except Exception as e:
@@ -69,7 +69,7 @@ async def lang_command_handler(message: Message, command: CommandObject) -> None
     """
     try:
         user_lang = message.from_user.language_code or "unknown"
-        response = controller.lang_command_response(user_lang)
+        response = await controller.lang_command_response(user_lang)
 
         await message.answer(response.text, reply_markup=inline.get_keyboard(response.kb))
     except Exception as e:
@@ -85,7 +85,7 @@ async def privacy_command_handler(message: Message, command: CommandObject) -> N
     """
     try:
         user_lang = message.from_user.language_code or "unknown"
-        response = controller.privacy_command_response(user_lang)
+        response = await controller.privacy_command_response(user_lang)
 
         await message.answer(response.text)
     except Exception as e:

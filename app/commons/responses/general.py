@@ -1,4 +1,5 @@
 from .extensions import BaseHandlerExtensions
+from ..services.user import UserService
 from ..utils.language_loader import load_language
 from app.schemas.general import ResponseModel
 # from ...schemas.general import ResponseModel
@@ -8,30 +9,40 @@ class GeneralResponse(BaseHandlerExtensions):
         # Если будет повторяться, то можно вынести в BaseHandlerExtensions
         super().__init__()
         self.lang = {}
+        self.user_service = UserService()
 
-    def start_command_response(self, user_id: int, user_name: str, code_lang: str, name: str) -> ResponseModel:
+    async def start_command_response(
+            self,
+            user_id: int,
+            username: str,
+            code_lang: str,
+    ) -> ResponseModel:
+        user = await self.user_service.get_or_create_user(user_id, username)
+
         self.lang = load_language(code_lang)
 
         return self.format_response(
-            text=self.lang['start'].format(name=name),
+            text=self.lang['start'],
             keyboard='start_kb'
         )
 
-    def invite_command_response(self, code_lang: str) -> ResponseModel:
+
+
+    async def invite_command_response(self, code_lang: str) -> ResponseModel:
         self.lang = load_language(code_lang)
 
         return self.format_response(
             text=self.lang['invite'].format(link='https://t.me/private_fastnet_bot')
         )
 
-    def help_command_response(self, code_lang: str) -> ResponseModel:
+    async def help_command_response(self, code_lang: str) -> ResponseModel:
         self.lang = load_language(code_lang)
 
         return self.format_response(
             text=self.lang['help']
         )
 
-    def lang_command_response(self, code_lang: str) -> ResponseModel:
+    async def lang_command_response(self, code_lang: str) -> ResponseModel:
         self.lang = load_language(code_lang)
 
         return self.format_response(

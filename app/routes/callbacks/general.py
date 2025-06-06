@@ -1,11 +1,11 @@
 from aiogram import Router, Bot, F
 from aiogram.types import Message, CallbackQuery
 
-from app.commons.responses.general import GeneralService
+from app.commons.responses.general import GeneralResponse
 from app.keyboards.inline.general import InlineKeyboardHandler
 
 router = Router()
-controller = GeneralService()
+controller = GeneralResponse()
 inline = InlineKeyboardHandler()
 
 
