@@ -4,8 +4,6 @@ from typing import Sequence, Any, Coroutine, Optional
 from sqlalchemy import update, exists, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-# from sqlalchemy.future import select
-
 
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
@@ -25,23 +23,26 @@ async def get_user(
     result = await session.scalars(stmt)
     return result.first()
 
+
 async def get_all_users(
     session: AsyncSession,
     skip: int = 0,
-    limit: int = 100
+    limit: int | None = 100
 ) -> Sequence[User]:
     """
     Получить список всех пользователей с пагинацией.
     """
-    stmt = (select(User).offset(skip).limit(limit).order_by(User.id))
-    # .where(User.status != 'removed'))
-    result = await session.scalars(stmt)
+    stmt = select(User).offset(skip)
+    if limit:
+        stmt = stmt.limit(limit)
+    result = await session.scalars(stmt.order_by(User.id))
     return result.all()
+
 
 async def get_user_by_id(
     session: AsyncSession,
     user_id: int
-) -> User | None:
+) -> Optional[User]:
     """
     Получить пользователя по полю user_id.
     """
@@ -57,12 +58,12 @@ async def get_user_field_by_id(
     """
     Получить определенное поле пользователя по user_id
     """
-    try:
-        stmt = select(getattr(User, field_name)).where(User.user_id == user_id)
-        result = await session.execute(stmt)
-        return result.scalar()
-    except AttributeError:
+    if not hasattr(User, field_name):
         return None
+
+    stmt = select(getattr(User, field_name)).where(User.user_id == user_id)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
 
 #----------------------------------------#----------------------------------------
 # Методы `create`
@@ -71,14 +72,19 @@ async def get_user_field_by_id(
 async def create_user(
     session: AsyncSession,
     user_create: UserCreate,
-) -> User:
+) -> Optional[User]:
     """
     Создать пользователя
     """
     user = User(**user_create.model_dump())
     session.add(user)
-    await session.commit()
-    return user
+    try:
+        await session.commit()
+        await session.refresh(user)
+        return user
+    except SQLAlchemyError:
+        await session.rollback()
+        return None
 
 #----------------------------------------#----------------------------------------
 # Методы `update`
@@ -87,18 +93,25 @@ async def create_user(
 async def update_user(
     session: AsyncSession,
     new_user: UserUpdate
-) -> User:
-    stmt = (
-        update(User)
-        .where(User.user_id == new_user.user_id)
-        .values(new_user.model_dump(exclude_none=True))
-        .returning(User)
-    )
-    result = await session.execute(stmt)
-    updated_user = result.scalar_one_or_none()
+) -> Optional[User]:
+    """
+    Обновить пользователя
+    """
+    try:
+        stmt = (
+            update(User)
+            .where(User.user_id == new_user.user_id)
+            .values(new_user.model_dump(exclude_none=True))
+            .returning(User)
+        )
+        result = await session.execute(stmt)
+        updated_user = result.scalar_one_or_none()
+        await session.commit()
+        return updated_user
+    except SQLAlchemyError:
+        await session.rollback()
+        return None
 
-    await session.commit()
-    return updated_user
 
 async def update_user_activity(
         session: AsyncSession,
@@ -110,12 +123,13 @@ async def update_user_activity(
     """
     try:
         stmt = update(User).where(User.user_id == user_id).values(activity=activity)
-        await session.execute(stmt)
+        result = await session.execute(stmt)
         await session.commit()
-        return True
+        return result.rowcount > 0
     except SQLAlchemyError:
         await session.rollback()
         return False
+
 
 async def assign_bot_to_user(
         session: AsyncSession,
@@ -127,12 +141,13 @@ async def assign_bot_to_user(
     """
     try:
         stmt = update(User).where(User.user_id == user_id).values(bot_id=bot_id)
-        await session.execute(stmt)
+        result = await session.execute(stmt)
         await session.commit()
-        return True
+        return result.rowcount > 0
     except SQLAlchemyError:
         await session.rollback()
         return False
+
 
 async def update_user_field(
         session: AsyncSession,
@@ -143,14 +158,22 @@ async def update_user_field(
     """
     Устанавливает значение value определенному полю, переданное в поле field_name
     """
+    if not hasattr(User, field_name):
+        return False
+
     try:
-        stmt = update(User).where(User.user_id == user_id).values({field_name: value})
-        await session.execute(stmt)
+        stmt = (
+            update(User)
+            .where(User.user_id == user_id)
+            .values({field_name: value})
+        )
+        result = await session.execute(stmt)
         await session.commit()
-        return True
-    except (SQLAlchemyError, AttributeError):
+        return result.rowcount > 0
+    except SQLAlchemyError:
         await session.rollback()
         return False
+
 
 #----------------------------------------#----------------------------------------
 # Проверки и методы помощники
