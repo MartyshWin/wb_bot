@@ -1,6 +1,6 @@
-from aiogram import Router, Bot, F
+from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
 import logging
 
 from app.commons.responses.general import GeneralResponse
@@ -10,13 +10,40 @@ router = Router()
 controller = GeneralResponse()
 inline = InlineKeyboardHandler()
 
-
+#----------------------------------------#----------------------------------------
 @router.callback_query(F.data == 'main')
 async def main(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
     """
-    Обработчик кнопки "Главное меню" или "Назад".
+    Обработчик кнопки "Главное меню".
 
-    :param callback_query: Объект, содержащий данные о взаимодействии пользователя с кнопкой.
+    Логика работы:
+    1. Вызывает метод `start_command_response`, который подготавливает текст и клавиатуру для главного меню.
+    2. Обновляет текст текущего сообщения и кнопки, предоставляя пользователю доступ к основным функциям.
+
+    Параметры:
+    - callback_query (CallbackQuery): Объект, содержащий данные о взаимодействии пользователя с кнопкой.
+
+    Возвращаемые данные:
+    - Обновляет текст сообщения и кнопки для отображения главного меню.
+
+    Используемые методы:
+    - `start_command_response(user_id, username, code_lang)`:
+      Подготавливает текст и клавиатуру для главного меню.
+
+    Словарь текстов:
+    - `response.text`: Текст главного меню.
+    - `response.kb`: Клавиатура для главного меню.
+
+    Примечания:
+    - Эта функция используется для возвращения пользователя в главное меню после выполнения действий.
+    - Логика обработки пользователя, его состояния или начальных данных централизована в методе `start_command_response`.
+
+    Пример использования:
+    - Пользователь нажимает кнопку "Главное меню", и ему отображается текст и кнопки главного меню.
+
+    :param callback_query: CallbackQuery
+    :param state: FSMContext
+    :return: None | dict
     """
     await state.clear()
     try:
@@ -26,3 +53,4 @@ async def main(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
         await callback_query.message.edit_text(response.text, reply_markup=inline.get_keyboard(response.kb))
     except Exception as e:
         logging.error("message:" + str(e))
+#----------------------------------------#----------------------------------------

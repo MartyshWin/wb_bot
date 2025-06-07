@@ -7,7 +7,7 @@ from .extensions import BaseHandlerExtensions
 from ..utils.language_loader import load_language
 from app.schemas.general import ResponseModel
 from ...models.alchemy_helper import db_helper
-from ...models.crud.client import user_exists_by_id, create_user
+from ...models.crud.clients import user_exists_by_id, create_user
 from ...schemas.user import UserRead, UserCreate
 
 
