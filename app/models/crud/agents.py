@@ -26,23 +26,6 @@ async def get_bot_by_id(
     return result.first()
 
 
-async def get_available_bot(
-        session: AsyncSession,
-        max_users: int = 30
-) -> Optional[Bot]:
-    """
-    Получение первого доступного бота с users_count < max_users.
-    """
-    stmt = (
-        select(Bot)
-        .where(Bot.users_count < max_users)
-        .order_by(Bot.bot_id)
-        .limit(1)
-    )
-    result = await session.scalars(stmt)
-    return result.first()
-
-
 async def get_all_bots(
         session: AsyncSession
 ) -> Sequence[Bot]:
@@ -99,48 +82,6 @@ async def create_bot(
 # Методы `update`
 # Обновление ботов
 #----------------------------------------#----------------------------------------
-async def increment_users_count(
-        session: AsyncSession,
-        bot_id: int
-) -> bool:
-    """
-    Увеличение счетчика пользователей для указанного бота в базе данных.
-    """
-    try:
-        stmt = (
-            update(Bot)
-            .where(Bot.bot_id == bot_id)
-            .values(users_count=Bot.users_count + 1)
-        )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount > 0
-    except SQLAlchemyError:
-        await session.rollback()
-        return False
-
-
-async def decrement_users_count(
-        session: AsyncSession,
-        bot_id: int
-) -> bool:
-    """
-    Уменьшение счетчика пользователей для указанного бота в базе данных.
-    """
-    try:
-        stmt = (
-            update(Bot)
-            .where(Bot.bot_id == bot_id, Bot.users_count > 0)
-            .values(users_count=Bot.users_count - 1)
-        )
-        result = await session.execute(stmt)
-        await session.commit()
-        return result.rowcount > 0
-    except SQLAlchemyError:
-        await session.rollback()
-        return False
-
-
 async def update_bot_field(
         session: AsyncSession,
         bot_id: int,
