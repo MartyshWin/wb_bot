@@ -1,3 +1,4 @@
+# Tasks
 from typing import Sequence, Any, Optional
 
 from sqlalchemy import select, update, delete, exists, func, distinct, text
@@ -6,27 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
-
-__all__ = [
-    # get
-    "get_task",
-    "get_tasks_by_user",
-    "get_tasks_by_user_max_coef",
-    "get_unique_warehouses",
-    "get_task_field",
-    # create
-    "create_task",
-    # update
-    "update_task",
-    "update_task_field",
-    "toggle_alarm_state",
-    "set_alarm_state_all",
-    # delete
-    "delete_tasks_by_user",
-    "delete_tasks_by_user_and_warehouse",
-    # misc
-    "task_exists",
-]
 
 # ---------------------------------------------------------------------------
 # GET

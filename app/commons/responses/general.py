@@ -8,7 +8,6 @@ class GeneralResponse(BaseHandlerExtensions):
     def __init__(self):
         # Если будет повторяться, то можно вынести в BaseHandlerExtensions
         super().__init__()
-        self.lang = {}
         self.user_service = UserService()
 
     async def start_command_response(

@@ -23,7 +23,7 @@ class UserService(BaseHandlerExtensions):
             async for session in db_helper.session_getter():
                 return await user_exists_by_id(session, user_id)
         except SQLAlchemyError as e:
-            logging.error(f"Ошибка при проверке пользователя {user_id}: {e}")
+            logging.error(f"Ошибка при проверке пользователя {user_id}: {e}", exc_info=True)
             return False
 
     @staticmethod
@@ -39,7 +39,7 @@ class UserService(BaseHandlerExtensions):
                 created_user = await create_user(session, user_data)
                 return UserRead.model_validate(created_user)  # Преобразуем ORM → Pydantic
         except SQLAlchemyError as e:
-            logging.error(f"Ошибка при создании пользователя {user_id}: {e}")
+            logging.error(f"Ошибка при создании пользователя {user_id}: {e}", exc_info=True)
             return None
 
     async def get_or_create_user(self, user_id: int, username: str) -> UserRead | None:

@@ -1,4 +1,4 @@
-# User
+# Users
 from typing import Sequence, Any, Coroutine, Optional
 
 from sqlalchemy import update, exists, select

@@ -47,7 +47,7 @@ async def main() -> None:
         await dp.start_polling(bot)
         await asyncio.sleep(1)
     except Exception as e:
-        logging.error(f"Ошибка в главной функции: {e}")
+        logging.error(f"Ошибка в главной функции: {e}", exc_info=True)
     finally:
         logging.info("Закрытие ресурсов...")
         # os.popen('say Программа завершена').read()
@@ -62,4 +62,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logging.warning("Программа была остановлена вручную.")
     except Exception as e:
-        logging.error(f"Ошибка во время выполнения программы: {e}")
+        logging.error(f"Ошибка во время выполнения программы: {e}", exc_info=True)

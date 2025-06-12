@@ -52,5 +52,5 @@ async def main(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
 
         await callback_query.message.edit_text(response.text, reply_markup=inline.get_keyboard(response.kb))
     except Exception as e:
-        logging.error("message:" + str(e))
+        logging.error("message:" + str(e), exc_info=True)
 #----------------------------------------#----------------------------------------

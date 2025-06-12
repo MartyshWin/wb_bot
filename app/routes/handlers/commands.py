@@ -25,5 +25,5 @@ async def start_command_handler(message: Message, command: CommandObject) -> Non
 
         await message.answer(response.text, reply_markup=inline.get_keyboard(response.kb))
     except Exception as e:
-        logging.error("message:" + str(e))
+        logging.error("message:" + str(e), exc_info=True)
 #----------------------------------------#----------------------------------------

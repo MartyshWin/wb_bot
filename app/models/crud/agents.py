@@ -1,4 +1,4 @@
-# Bot
+# Bots
 from typing import Sequence, Optional, Any
 
 import re

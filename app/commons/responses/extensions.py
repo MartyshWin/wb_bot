@@ -8,7 +8,8 @@ from app.schemas.general import ResponseModel
 
 class BaseHandlerExtensions:
     def __init__(self):
-        self.lang: dict = {}
+        self.lang: dict[str, dict[str, str]] = {}
+        # text = self.lang.get("create_task_list", {}).get("space", "🔒 no text")
 
     @staticmethod
     def format_response(

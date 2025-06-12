@@ -91,25 +91,6 @@ class InlineKeyboardHandler:
         # self.select_date: InlineKeyboardMarkup = self.create_select_date()
 
 
-    @staticmethod
-    # Создать enums модель для method, где ожидается fast или full
-    def get_continue_kb(method: str) -> InlineKeyboardMarkup:
-        """
-        Создает inline-клавиатуру с кнопкой "Продолжить" и параметризованным callback_data.
-
-        :param method: Метод подключения, например "fast" или "full".
-                      Используется для передачи в callback_data и последующей обработки.
-        :return: Объект InlineKeyboardMarkup с двумя кнопками:
-                 - "Продолжить", содержащая callback_data вида "continue_setup:<method>"
-                 - "Назад", ведущая на начальное меню с callback_data "home"
-        """
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="Продолжить", callback_data=f"continue_setup:{method}")],
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="home")],
-            ]
-        )
-
 
     def get_keyboard(self, attribute_name: str | object) -> str | None | Any:
         """
@@ -314,7 +295,8 @@ class InlineKeyboardHandler:
             if wid in selected_warehouses or wid in selected_list:
                 name = f"🟢 {name}"
 
-            row.append(InlineKeyboardButton(text=name, callback_data=f"select_warehouse_{mode}_{wid}"))
+            row.append(InlineKeyboardButton(text=name, callback_data=f"task_mode_{mode}_id{wid}"))
+            # row.append(InlineKeyboardButton(text=name, callback_data=f"select_warehouse_{mode}_id{wid}"))
             if len(row) == 2:
                 buttons.append(row)
                 row = []
@@ -324,9 +306,9 @@ class InlineKeyboardHandler:
 
         pagination: list[InlineKeyboardButton] = []
         if page > 0:
-            pagination.append(InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"warehouse_page_{mode}_{page - 1}"))
+            pagination.append(InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"task_mode_{mode}_{page - 1}"))
         if page < total_pages - 1:
-            pagination.append(InlineKeyboardButton(text="Следующая ➡️", callback_data=f"warehouse_page_{mode}_{page + 1}"))
+            pagination.append(InlineKeyboardButton(text="Следующая ➡️", callback_data=f"task_mode_{mode}_{page + 1}"))
         if pagination:
             buttons.append(pagination)
 

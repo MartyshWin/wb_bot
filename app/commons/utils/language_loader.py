@@ -2,7 +2,7 @@ import importlib
 from types import ModuleType
 
 
-def load_language(lang_code: str) -> dict[str, str]:
+def load_language(lang_code: str) -> dict[str, dict[str, str]]:
     """
     Загружает словарь языка по коду языка (например, 'ru', 'en').
 

@@ -1,4 +1,4 @@
-lang: dict[str, str] = {
+lang: dict[str, dict[str, str]] = {
     '404': (
         "(¬_¬)\n"
         "<b>Хм...</b>\n"
