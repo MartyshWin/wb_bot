@@ -54,7 +54,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     try:
-        setup_logger()
+        setup_logger(settings.logging.level)
         logger = logging.getLogger(__name__)
 
         logging.info("Запуск программы...")

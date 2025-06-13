@@ -2,6 +2,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field, SecretStr, PostgresDsn
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.enums.logging import LogLevel
+
 BASE_DIR = Path(__file__).resolve().parent
 
 class BotSettings(BaseModel):
@@ -14,8 +16,8 @@ class BotSettings(BaseModel):
 
 
 class LoggingSettings(BaseModel):
-    level: str = "INFO"
-    log_to_file: bool = True
+    level: LogLevel = Field(LogLevel.INFO)
+    log_to_file_status: bool = True
     logs_dir: Path = Path("logs")
 
 class DatabaseSettings(BaseModel):
