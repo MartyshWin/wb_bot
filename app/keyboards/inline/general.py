@@ -1,9 +1,18 @@
+import ast
+import json
 import re
-from typing import Union, Callable, List, Any, TypedDict
+import shlex
+from itertools import batched
+from typing import Union, Callable, List, Any, TypedDict, Optional, Iterable, Tuple, Sequence
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 import calendar
 from datetime import datetime
+
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from app.schemas.general import ResponseWarehouses
+
 
 # Кнопки должны получать язык приложения, чтобы соответствовать выбранному пользователем
 class InlineKeyboardHandler:
@@ -91,37 +100,90 @@ class InlineKeyboardHandler:
         # self.select_date: InlineKeyboardMarkup = self.create_select_date()
 
 
+    # def get_keyboard(self, attribute_name: str | object) -> str | None | Any:
+    #     """
+    #     Получает метод по имени и вызывает его с аргументами, если они указаны.
+    #
+    #     :param attribute_name: Имя метода и аргументы в формате 'method_name(arg1, arg2)'.
+    #     :return: Результат выполнения метода или строка с ошибкой, если метод не найден.
+    #     """
+    #     # Проверяем, есть ли скобки в строке
+    #     if attribute_name is not None:
+    #         if '(' in attribute_name and attribute_name.endswith(')'):
+    #             # Извлекаем имя метода и аргументы
+    #             match = re.match(r"(\w+)\((.*)\)", attribute_name)
+    #             if not match:
+    #                 return "Invalid format"
+    #
+    #             method_name, args_str = match.groups()
+    #
+    #             # Получаем метод по имени
+    #             method = getattr(self, method_name, None)
+    #             if not method or not callable(method):
+    #                 return "Not Found keyboard"
+    #
+    #             # Разделяем аргументы по запятой и убираем лишние пробелы
+    #             args: List[str] = [arg.strip() for arg in args_str.split(',')] if args_str else []
+    #
+    #             # Вызываем метод с аргументами
+    #             return method(*args)
+    #         else:
+    #             # Если скобок нет, просто вызываем метод без аргументов
+    #             return getattr(self, attribute_name, "Not Found keyboard")
 
-    def get_keyboard(self, attribute_name: str | object) -> str | None | Any:
+    def get_keyboard(self, call: Optional[str] = None) -> Any:
         """
-        Получает метод по имени и вызывает его с аргументами, если они указаны.
+        Динамически вызывает метод экземпляра по строке вида
+        ``"method_name(1, 'txt', True)"`` или просто ``"property_name"``.
 
-        :param attribute_name: Имя метода и аргументы в формате 'method_name(arg1, arg2)'.
-        :return: Результат выполнения метода или строка с ошибкой, если метод не найден.
+        :param call: Строка с вызовом или именем атрибута.
+        :raises ValueError: Если формат строки некорректен.
+        :raises AttributeError: Если метод/атрибут не найден.
+        :raises TypeError: Если попытка вызвать не-callable.
         """
-        # Проверяем, есть ли скобки в строке
-        if attribute_name is not None:
-            if '(' in attribute_name and attribute_name.endswith(')'):
-                # Извлекаем имя метода и аргументы
-                match = re.match(r"(\w+)\((.*)\)", attribute_name)
-                if not match:
-                    return "Invalid format"
+        if call is None:
+            raise ValueError("call may not be None")
 
-                method_name, args_str = match.groups()
+        # Вызов с аргументами
+        if '(' in call and call.rstrip().endswith(')'):
+            name, args = self._parse_call(call)
+            method = self._get_callable(name)
+            return method(*args)
 
-                # Получаем метод по имени
-                method = getattr(self, method_name, None)
-                if not method or not callable(method):
-                    return "Not Found keyboard"
+        # Просто атрибут/метод без скобок
+        attr = getattr(self, call, None)
+        if attr is None:
+            raise AttributeError(f"{call!r} not found in {self.__class__.__name__}")
+        return attr() if callable(attr) else attr
 
-                # Разделяем аргументы по запятой и убираем лишние пробелы
-                args: List[str] = [arg.strip() for arg in args_str.split(',')] if args_str else []
+    # ---- вспомогательные private-методы ----
+    _call_re = re.compile(r"\s*(\w+)\s*\((.*)\)\s*")
 
-                # Вызываем метод с аргументами
-                return method(*args)
-            else:
-                # Если скобок нет, просто вызываем метод без аргументов
-                return getattr(self, attribute_name, "Not Found keyboard")
+    def _parse_call(self, text: str) -> tuple[str, List[Any]]:
+        """Возвращает (имя, [аргументы])."""
+        m = self._call_re.fullmatch(text)
+        if not m:
+            raise ValueError(f"Invalid call syntax: {text!r}")
+
+        name, arg_str = m.groups()
+        if not arg_str.strip():
+            return name, []
+
+        lexer = shlex.shlex(arg_str, posix=True)
+        lexer.whitespace_split = True
+        lexer.whitespace = ','
+        args = [ast.literal_eval(tok) for tok in lexer]
+        return name, args
+
+    def _get_callable(self, name: str) -> Callable[..., Any]:
+        """Проверяет, что атрибут существует и является вызываемым."""
+        attr = getattr(self, name, None)
+        if attr is None:
+            raise AttributeError(f"{name!r} not found in {self.__class__.__name__}")
+        if not callable(attr):
+            raise TypeError(f"{name!r} is not callable")
+        return attr
+    # ---------------------------
 
     @staticmethod
     def build_inline_keyboard(
@@ -163,6 +225,26 @@ class InlineKeyboardHandler:
             inline_keyboard.append(button_row)
 
         return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+    # Собирает InlineKeyboardMarkup из пар (текст, callback) с нужной шириной строки.
+    @staticmethod
+    def build_kb(
+            pairs: Iterable[Tuple[str, str]],
+            *,
+            row_width: int = 2,
+            tail_rows: Sequence[Sequence[Tuple[str, str]]] = (),
+    ) -> InlineKeyboardMarkup:
+        """
+        pairs      – последовательность (text, callback_data)
+        row_width  – сколько кнопок в строке
+        tail_rows  – список готовых строк, которые надо при-клеить в конец
+        """
+        kb = InlineKeyboardBuilder()
+        for batch in batched(pairs, row_width):
+            kb.row(*(InlineKeyboardButton(text=text, callback_data=cb) for text, cb in batch if text))
+        for tr in tail_rows:
+            kb.row(*(InlineKeyboardButton(text=text, callback_data=cb) for text, cb in tr if text))
+        return kb.as_markup()
 
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
     #   ► Создание клавиатур с указанием параметров
@@ -276,47 +358,45 @@ class InlineKeyboardHandler:
 
         return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    @staticmethod
+
     def create_warehouse_list(
             self,
-            warehouses: list[dict[str, int | str]],
-            mode: str,
+            page_data: ResponseWarehouses,
             selected_warehouses: list[int],
             selected_list: list[int],
-            page: int,
-            total_pages: int
     ) -> InlineKeyboardMarkup:
-        buttons: list[list[InlineKeyboardButton]] = []
-        row: list[InlineKeyboardButton] = []
+        # --- данные из модели: Парсинг Pydantic модели --------------------------
+        warehouses = page_data.warehouses
+        page_idx: int = page_data.page_index
+        total_pages = page_data.total_pages
+        url = f"task_mode_{page_data.mode}"
 
+        # --- основная сетка кнопок ----------------------------------------------
+        pairs: list[tuple[str, str]] = []
         for warehouse in warehouses:
-            name = str(warehouse["name"])
             wid = warehouse["id"]
-            if wid in selected_warehouses or wid in selected_list:
-                name = f"🟢 {name}"
+            name = warehouse["name"]
+            label = f"🟢 {name}" if wid in (*selected_warehouses, *selected_list) else name
+            pairs.append((str(label), f"{url}_id{wid}"))
 
-            row.append(InlineKeyboardButton(text=name, callback_data=f"task_mode_{mode}_id{wid}"))
-            # row.append(InlineKeyboardButton(text=name, callback_data=f"select_warehouse_{mode}_id{wid}"))
-            if len(row) == 2:
-                buttons.append(row)
-                row = []
+        # --- «хвост» (пагинация, подтверждение, назад) ---------------------------
+        tail_rows: list[list[tuple[str, str]]] = []
+        pagination: list[tuple[str, str]] = []
 
-        if row:
-            buttons.append(row)
-
-        pagination: list[InlineKeyboardButton] = []
-        if page > 0:
-            pagination.append(InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"task_mode_{mode}_{page - 1}"))
-        if page < total_pages - 1:
-            pagination.append(InlineKeyboardButton(text="Следующая ➡️", callback_data=f"task_mode_{mode}_{page + 1}"))
+        if page_idx > 0:
+            pagination.append(("⬅️ Предыдущая", f"{url}_{page_idx - 1}"))
+        if page_idx < total_pages - 1:
+            pagination.append(("Следующая ➡️", f"{url}_{page_idx + 1}"))
         if pagination:
-            buttons.append(pagination)
+            tail_rows.append(pagination)
 
         if selected_warehouses:
-            buttons.append([InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="confirm_selection")])
+            tail_rows.append([("Подтвердить выбор ✅", "confirm_selection")])
 
-        buttons.append([InlineKeyboardButton(text="Назад ↩️", callback_data="tasks_append")])
-        return InlineKeyboardMarkup(inline_keyboard=buttons)
+        tail_rows.append([("Назад ↩️", "create_task")])
+
+        # --- сборка --------------------------------------------------------------
+        return self.build_kb(pairs, row_width=2, tail_rows=tail_rows)
 
     @staticmethod
     def create_alarm_list(
