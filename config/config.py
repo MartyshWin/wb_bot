@@ -16,14 +16,14 @@ class BotSettings(BaseModel):
 
 
 class LoggingSettings(BaseModel):
-    level: LogLevel = Field(LogLevel.INFO)
+    level: LogLevel = Field(LogLevel.INFO) # Редактировать в .env: LOGGING__LEVEL=INFO
     log_to_file_status: bool = True
     logs_dir: Path = Path("logs")
 
 class DatabaseSettings(BaseModel):
     # url: PostgresDsn
     url: str
-    echo: bool = False
+    echo: bool = False  # Редактировать в .env: DB__ECHO=False
     echo_pool: bool = False
     pool_size: int = 50
     max_overflow: int = 10

@@ -15,11 +15,11 @@ class LoggingMiddleware(BaseMiddleware):
         data: Dict[str, Any]
     ) -> Any:
         # Логируем событие
-        logging.debug(f"Middleware вызван для события: {type(event).__name__}")
+        logging.warning(f"Middleware вызван для события: {type(event).__name__}")
 
         # Проверяем, является ли событие `CallbackQuery`
         if isinstance(event, Update) and event.callback_query:
-            logging.debug(f"Получен CallbackQuery: {event.callback_query.data}")
+            logging.warning(f"Получен CallbackQuery: {event.callback_query.data}")
 
         # Продолжаем выполнение обработчика
         return await handler(event, data)

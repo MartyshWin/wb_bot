@@ -22,14 +22,20 @@ BASE_LOGGING_CONFIG: dict = {
 
     # ---------- ЛОГГЕРЫ ПО МОДУЛЯМ ----------
     "loggers": {
+        "turnoff-aiosqlite.core": {
+            "level": "WARNING",
+            "handlers": ["console"],
+            "propagate": False          # важно, иначе сообщения «просочатся» к root
+        },
         # заглушаем SQLAlchemy: BEGIN/COMMIT не увидим, ошибки остаются
-        "sqlalchemy.engine": {
+        # Поменять на INFO, чтобы увидеть BEGIN/COMMIT
+        # В .env нужно было поставить DB__ECHO=False, чтобы отключить echo
+        "turnoff-sqlalchemy.engine": {
             "level": "WARNING",
             "handlers": ["console"],
             "propagate": False,
         },
     },
-
     # ---------- КОРНЕВОЙ ЛОГГЕР ----------
     "root": {
         "level": "DEBUG",

@@ -99,10 +99,11 @@ def add_success_level():
 
 def setup_logger(logging_level: LogLevel = LogLevel.DEBUG):
     add_success_level()  # Добавляем уровень SUCCESS
-
     cfg = copy.deepcopy(BASE_LOGGING_CONFIG)
 
     # ——— динамически подставляем уровень ———
+    # Незабываем изменить уровень в КОНФИГЕ и .ENV
+    # От этих двух параметров зависит поведение логгера
     cfg["root"]["level"] = logging_level.value
     cfg["handlers"]["console"]["level"] = logging_level.value
 

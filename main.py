@@ -26,14 +26,6 @@ async def main() -> None:
         )
         dp = Dispatcher()
 
-        # Получаем информацию о боте
-        me = await bot.get_me()
-        bot_info = (
-            f"Ваш бот: {me.first_name} (@{me.username}) - ID: {me.id}\n"
-            f"Ссылка: https://t.me/{me.username}"
-        )
-        logging.critical(bot_info)
-
         # Подключение Middleware
         dp.update.middleware(LoggingMiddleware())
 
@@ -50,7 +42,7 @@ async def main() -> None:
         logging.error(f"Ошибка в главной функции: {e}", exc_info=True)
     finally:
         logging.info("Закрытие ресурсов...")
-        # os.popen('say Программа завершена').read()
+
 
 if __name__ == "__main__":
     try:
