@@ -26,7 +26,7 @@ async def get_all_warehouses(
     offset: int = 0,
     limit: int | None = 100,
 ) -> Sequence[Warehouse]:
-    """Вернуть все склады (с пагинацией)."""
+    """Вернуть все склады (с учетом лимитов и смещений)."""
     stmt = select(Warehouse).offset(offset)
     if limit:
         stmt = stmt.limit(limit)

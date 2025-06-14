@@ -16,14 +16,16 @@ class GeneralResponse(BaseHandlerExtensions):
             username: str,
             code_lang: str,
     ) -> ResponseModel:
-        user = await self.user_service.get_or_create_user(user_id, username)
-
         self.lang = load_language(code_lang)
+        try:
+            user = await self.user_service.get_or_create_user(user_id, username)
 
-        return self.format_response(
-            text=self.lang['start'],
-            keyboard='start_kb'
-        )
+            return self.format_response(
+                text=self.lang['start'],
+                keyboard='start_kb'
+            )
+        except Exception as e:
+            return self.format_response(self.lang['error_occurred'])
 
 
 

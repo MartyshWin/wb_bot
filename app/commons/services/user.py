@@ -27,7 +27,7 @@ class UserService(BaseHandlerExtensions):
             return False
 
     @staticmethod
-    async def create_default_user(user_id: int, username: str) -> UserRead | None:
+    async def create_default_user(user_id: int, username: str) -> UserRead:
         try:
             user_data = UserCreate(
                 user_id=user_id,
@@ -40,9 +40,8 @@ class UserService(BaseHandlerExtensions):
                 return UserRead.model_validate(created_user)  # Преобразуем ORM → Pydantic
         except SQLAlchemyError as e:
             logging.error(f"Ошибка при создании пользователя {user_id}: {e}", exc_info=True)
-            return None
 
-    async def get_or_create_user(self, user_id: int, username: str) -> UserRead | None:
+    async def get_or_create_user(self, user_id: int, username: str) -> UserRead:
         if await self.user_exists(user_id):
             return UserRead(user_id=user_id, username=username)
 

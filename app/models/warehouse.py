@@ -8,7 +8,12 @@ from .base import Base  # Base уже содержит: id, created_at, updated_
 
 
 class Warehouse(Base):
-    __tablename__ = "warehouse"
+    __tablename__ = "warehouses"
+    __allow_unmapped__ = True  # чтобы SQLAlchemy не ругался
+
+    # убираем timestamp-поля
+    created_at = None
+    updated_at = None
 
     warehouse_id: Mapped[int] = mapped_column(Integer, unique=True, index=True, comment="Внешний ID склада (от маркетплейса)")
     warehouse_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, comment="Название склада")
