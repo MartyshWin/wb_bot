@@ -11,7 +11,8 @@ from datetime import datetime
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.schemas.general import ResponseWarehouses
+from app.enums.general import BoxType
+from app.schemas.general import ResponseWarehouses, ResponseBoxTypes
 
 
 # Кнопки должны получать язык приложения, чтобы соответствовать выбранному пользователем
@@ -282,44 +283,79 @@ class InlineKeyboardHandler:
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
     #   ► Создание навигационных клавиатур с указанием параметров
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
+    # def box_type(
+    #         self,
+    #         dictionary: dict[int, ...] | None = None,
+    #         back: bool = False,
+    #         warehouse_id: int = 0,
+    #         page: int = 0,
+    #         box_default: list[int] = [],
+    #         mode: str = ''
+    # ) -> InlineKeyboardMarkup:
+    #     checked = {5: '🟢 ', 6: '🟢 ', 2: '🟢 '} if dictionary else {}
+    #     confirm = (
+    #         [InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="confirm_box_type")]
+    #         if dictionary and box_default != dictionary else []
+    #     )
+    #     back_cb: str = (
+    #         f"task_update_select_{warehouse_id}_{page}"
+    #         if back else f"task_mode_{mode}"
+    #     )
+    #
+    #     return self.build_inline_keyboard([
+    #         [{
+    #             "text": f"{checked.get(5, '')}Монопаллеты",
+    #             "callback_data": f"box_type_mono_{warehouse_id}_{page}"
+    #         }],
+    #         [{
+    #             "text": f"{checked.get(6, '')}Суперсейф",
+    #             "callback_data": f"box_type_safe_{warehouse_id}_{page}"
+    #         }],
+    #         [{
+    #             "text": f"{checked.get(2, '')}Короба",
+    #             "callback_data": f"box_type_pan_{warehouse_id}_{page}"
+    #         }],
+    #         confirm,
+    #         [{
+    #             "text": "Назад ↩️",
+    #             "callback_data": back_cb
+    #         }],
+    #     ])
+
     def box_type(
             self,
-            dictionary: dict[int, ...] | None = None,
-            back: bool = False,
-            warehouse_id: int = 0,
-            page: int = 0,
-            box_default: list[int] = [],
-            mode: str = ''
+            data: ResponseBoxTypes,
+            box_titles: dict[str, str]
     ) -> InlineKeyboardMarkup:
-        checked = {5: '🟢 ', 6: '🟢 ', 2: '🟢 '} if dictionary else {}
-        confirm = (
-            [InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="confirm_box_type")]
-            if dictionary and box_default != dictionary else []
-        )
-        back_cb: str = (
-            f"task_update_select_{warehouse_id}_{page}"
-            if back else f"task_mode_{mode}"
-        )
+        # --- шорткаты и маркеры ----------------------------------------------------
+        selected = set(data.selected or [])  # отмеченные типы
+        checked = {i: "🟢 " for i in (selected or {})}  # зелёная точка у выбранных
+        url = "box_type"
+        url_back = f"task_mode_{data.mode}"  # префикс для callback
 
-        return self.build_inline_keyboard([
-            [{
-                "text": f"{checked.get(5, '')}Монопаллеты",
-                "callback_data": f"box_type_mono_{warehouse_id}_{page}"
-            }],
-            [{
-                "text": f"{checked.get(6, '')}Суперсейф",
-                "callback_data": f"box_type_safe_{warehouse_id}_{page}"
-            }],
-            [{
-                "text": f"{checked.get(2, '')}Короба",
-                "callback_data": f"box_type_pan_{warehouse_id}_{page}"
-            }],
-            confirm,
-            [{
-                "text": "Назад ↩️",
-                "callback_data": back_cb
-            }],
-        ])
+        # --- кнопки типов коробок --------------------------------------------------
+        pairs: list[tuple[str, str]] = []
+        for bt in BoxType:  # Enum обеспечивает фикс. порядок
+            title = box_titles[bt]  # "Монопаллеты" / …
+            code = bt.value  # "mono" / "safe" / "pan"
+            bullet = "🟢 " if code in selected else ""  # зелёная метка
+            cb_data = f"{url}_{code}_{data.warehouse_id}_{data.page}"
+
+            pairs.append((f"{bullet}{title}", cb_data))
+
+        # --- хвостовые кнопки (confirm / back / pagination) ------------------------
+        tail: list[list[tuple[str, str]]] = []
+
+        # confirm – показываем, если выбор есть и он отличается от дефолта
+        if selected and (data.box_default or []) != list(selected):
+            tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
+
+        # назад
+        back_cb: str = f"task_update_select_{data.warehouse_id}_{data.page}" if data.back else url_back
+        tail.append([("Назад ↩️", back_cb)])
+
+        # --- сборка и возврат -------------------------------------------------------
+        return self.build_kb(pairs, row_width=1, tail_rows=tail)
 
     @staticmethod
     def coefs(
@@ -391,7 +427,7 @@ class InlineKeyboardHandler:
             tail_rows.append(pagination)
 
         if selected_warehouses:
-            tail_rows.append([("Подтвердить выбор ✅", "confirm_selection")])
+            tail_rows.append([("Подтвердить выбор ✅", f"{url}_confirm")])
 
         tail_rows.append([("Назад ↩️", "create_task")])
 
