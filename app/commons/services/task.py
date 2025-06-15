@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Coroutine
+from typing import Any, Coroutine, Sequence
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -8,16 +8,36 @@ from ..utils.language_loader import load_language
 from app.schemas.general import ResponseModel, ResponseWarehouses, ResponseError
 from ...models.alchemy_helper import db_helper
 # from ...models.crud.clients import user_exists_by_id, create_user
-from ...models.crud.hubs import get_all_warehouses, count_warehouses
+from ...models.crud.hubs import get_all_warehouses, count_warehouses, get_warehouses_by_ids
 from ...schemas.user import UserRead, UserCreate
 
-# Перенести в TaskResponse
 class TaskService(BaseHandlerExtensions):
     def __init__(self):
         super().__init__()
 
+    @staticmethod
+    def sync_selected_warehouses(
+            all_warehouses: list[dict[str, str | int]],
+            selected_ids: list[int],
+    ) -> list[dict[str, str | int]]:
+        """
+        Возвращает список складов только с теми `id`, которые есть в `selected_ids`.
+
+        • `all_warehouses` – полный справочник: [{'id': 218987, 'name': 'Алматы'}, …]
+        • `selected_ids`   – актуальный набор выбранных ID: [218987, 324108]
+
+        Результат всегда «синхронизирован»:
+        – склады, id которых пропали из `selected_ids`, удаляются;
+        – новые id добавляются (при условии, что они есть в справочнике).
+        """
+        # словарь справочника id → объект склада
+        ref = {w["id"]: w for w in all_warehouses}
+
+        # формируем «чистый» список только по актуальным id
+        return [ref[w_id] for w_id in selected_ids if w_id in ref]
+
+    @staticmethod
     async def handle_create_task(
-            self,
             user_id: int,
             page: int = None,
             lang_dict: dict[str, dict[str, str]] | None = None
@@ -38,19 +58,6 @@ class TaskService(BaseHandlerExtensions):
             # Логирование для отладки
             logging.error(f"Error in handle_create_task: {e}", exc_info=True)
             return {'error': 'error occurred'}
-
-    async def select_warehouses_and_pages(
-            self,
-            user_id: int,
-            page: int = None,
-            lang_dict: dict[str, dict[str, str]] | None = None
-    ) -> ResponseWarehouses | ResponseError:
-        try:
-            pass
-        except Exception as e:
-            # Логирование для отладки
-            logging.error(f"Error in select_warehouses_and_pages: {e}", exc_info=True)
-            return ResponseError(message="Произошла ошибка в функции select_warehouses_and_pages", code="INTERNAL_ERROR", errors=[str(e)])
 
     @staticmethod
     async def get_warehouses_page(
