@@ -48,12 +48,12 @@ class ResponseBoxTypes(BaseModel):
     warehouse_id: int = Field(default=0, description="Бизнес-ID склада")
     page: int = Field(default=0, ge=0, description="Индекс текущей страницы")
     box_default: Optional[list[int]] = Field(default=None, description="Типы по умолчанию из задачи")
-    mode: TaskMode = Field(default=TaskMode.FLEX, description="flex / mass")
+    mode: TaskMode = Field(default=TaskMode.MASS, description="flex / mass")
 
 class ResponseCoefs(BaseModel):
     selected: Optional[conint(ge=0, le=20)] = Field(None, description="Выбранный коэффициент (0‥20) или None")
     coef_default: conint(ge=0, le=20) = Field(0, description="Коэффициент по умолчанию из задачи")
-    back: bool = Field(False, description="True, если вернулись из режима редактирования")
-    warehouse_id: int = Field(0, description="Бизнес-ID склада")
-    page: int = Field(0, ge=0, description="Индекс текущей страницы")
-    mode: TaskMode = Field(TaskMode.FLEX, description="flex / mass")
+    back: bool = Field(default=False, description="Пришли из режима редактирования")
+    warehouse_id: int = Field(default=0, description="Бизнес-ID склада")
+    page: int = Field(default=0, ge=0, description="Индекс текущей страницы")
+    mode: TaskMode = Field(default=TaskMode.MASS, description="flex / mass")

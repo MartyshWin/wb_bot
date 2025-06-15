@@ -84,8 +84,8 @@ class TaskResponse(BaseHandlerExtensions):
         return int(raw), None, False, False
 
     @staticmethod
-    def _merge_choose_wh(old: dict, **patch) -> dict:
-        """Иммутабельное обновление choose_wh"""
+    def _merge_setup_task(old: dict, **patch) -> dict:
+        """Иммутабельное обновление setup_task"""
         return {**old, **patch}
 
     @staticmethod
@@ -193,9 +193,10 @@ class TaskResponse(BaseHandlerExtensions):
             for code in state_data.get('box_type')
         )
 
+        coef = None if state_data['coefs'] == '' else state_data['coefs']
         coef_schema = ResponseCoefs(
-            selected=state_data.get("coefs"),  # None или 0‥20
-            mode=state_data.get("mode", TaskMode.FLEX),
+            selected=coef,
+            mode=state_data.get("mode"),
         )
         return self.format_response(
             text=lang['selected_box_type']["text"].format(
@@ -235,55 +236,55 @@ class TaskResponse(BaseHandlerExtensions):
             mode: TaskMode = (
                 TaskMode(raw_mode)  # превращаем в Enum
                 if raw_mode in TaskMode._value2member_map_  # проверка «значение ∈ enum»
-                else TaskMode.FLEX  # дефолт
+                else TaskMode.MASS  # дефолт
             )
 
             # ── 2. raw-параметры из callback ─────────────────────────────────────
             raw = self.safe_get(data, 3) or 0
             page, selected_wid, is_id, is_confirm = self._parse_raw(raw)
 
-            # ── 3. state (choose_wh)  ────────────────────────────────────────────
+            # ── 3. state (setup_task)  ────────────────────────────────────────────
             # Создание машины состояний: FSMContext и базового словаря
             state_data = await state.get_data()
-            choose_wh: dict = state_data.get('choose_wh', self.task_state_template)
-            logging.warning(choose_wh) # REMOVE
+            setup_task: dict = state_data.get('setup_task', self.task_state_template)
+            logging.warning(setup_task) # REMOVE
 
             # ── 4. confirm-ветка  ────────────────────────────────────────────────
-            if choose_wh.get('list') and choose_wh.get('selected_list') and is_confirm:
-                return await self.commit_hubs_selection(choose_wh, self.lang)
+            if setup_task.get('list') and setup_task.get('selected_list') and is_confirm:
+                return await self.commit_hubs_selection(setup_task, self.lang)
 
             # ── 5. пересчёт list / current_page / mode ───────────────────────────
             if (
-                    choose_wh.get('current_page') != int(page) # Если страница в памяти != текущая
+                    setup_task.get('current_page') != int(page) # Если страница в памяти != текущая
                     or selected_wid
-                    or choose_wh.get('mode') != mode # сменился режим
+                    or setup_task.get('mode') != mode # сменился режим
             ):
                 # ── 5.1. Очистка состояния и установка нового
                 await state.clear()
-                await state.set_state(TaskStates.context_data_choose_wh)
+                await state.set_state(TaskStates.context_data_setup_task)
 
                 # ── 5.2. Список складов согласно режиму
-                whs_list: list[int] = self.toggle_id(choose_wh.get('list', []), selected_wid, mode)
+                whs_list: list[int] = self.toggle_id(setup_task.get('list', []), selected_wid, mode)
 
                 # ── 5.3. Обновление страницы в памяти, если была нажата кнопка НЕ со складом
-                current_page: int = page if selected_wid is None else choose_wh.get('current_page')
+                current_page: int = page if selected_wid is None else setup_task.get('current_page')
 
                 # ── 5.4. Обновление словаря, с подставленными новыми значениями
-                choose_wh = self._merge_choose_wh(
-                    choose_wh,
+                setup_task = self._merge_setup_task(
+                    setup_task,
                     mode=mode,
                     list=whs_list, # Если flex, то будет просто обновляться whs_list
                     current_page=current_page,
                 )
-                await state.update_data(choose_wh=choose_wh)
+                await state.update_data(setup_task=setup_task)
 
             # ── 6. получаем страницу складов  ───────────────
-            offset: int = choose_wh.get('current_page') * self.limit
+            offset: int = setup_task.get('current_page') * self.limit
             warehouses_page = await self.task_service.get_warehouses_page(self.limit, offset, mode)
 
             # ── 6.1. объединяем объекты: сначала «старые», потом текущая страница
             combined_wh = (
-                    choose_wh.get('selected_list', [])  # то, что уже было сохранено
+                    setup_task.get('selected_list', [])  # то, что уже было сохранено
                     + warehouses_page.warehouses  # склады на текущей странице
             )
 
@@ -296,22 +297,22 @@ class TaskResponse(BaseHandlerExtensions):
             filtered: list[dict[str, str | int]] = (
                 self.task_service.sync_selected_warehouses(
                     list(unique_wh),                        # полный справочник без дублей
-                    choose_wh.get('list', [])               # выбранные id
+                    setup_task.get('list', [])               # выбранные id
                 )
             )
 
             # ── 6.4. Обновление словаря
-            choose_wh = self._merge_choose_wh(choose_wh, selected_list=filtered)
-            await state.update_data(choose_wh=choose_wh)
-            logging.warning(choose_wh)  # REMOVE
+            setup_task = self._merge_setup_task(setup_task, selected_list=filtered)
+            await state.update_data(setup_task=setup_task)
+            logging.warning(setup_task)  # REMOVE
 
             # ── 7. Ответ пользователю  ───────────────────────────────────────────
             return self.format_response(
                 text=self.lang['create_task_list'][f'task_mode_{mode.value}'],
                 keyboard=self.inline.create_warehouse_list(
                     warehouses_page,
-                    choose_wh['list'],
-                    choose_wh['selected_list']
+                    setup_task['list'],
+                    setup_task['selected_list']
                 )
             )
         except Exception as e:
@@ -332,22 +333,22 @@ class TaskResponse(BaseHandlerExtensions):
         try:
             self.lang = load_language(code_lang)
 
-            # ── 1. state (choose_wh)  ────────────────────────────────────────────
+            # ── 1. state (setup_task)  ────────────────────────────────────────────
             # Создание машины состояний: FSMContext и базового словаря
             state_data = await state.get_data()
-            choose_wh: dict = state_data['choose_wh'] # choose_wh не может отсутствовать
-            choose_bt: dict = state_data.get('choose_bt', {})
+            setup_task: dict = state_data['setup_task'] # setup_task не может отсутствовать
+            setup_task_bxts: dict = setup_task.get('box_type', {})
 
             # ── 1.1. Получаем mode, он не может отсутствовать
-            mode: TaskMode = choose_wh['mode']
+            mode: TaskMode = setup_task['mode']
 
             # ── 2. Получение action и is_confirm из callback ─────────────────────
             action = self.safe_get(data, 2)
             is_confirm: bool = action.startswith("confirm")
 
             # ── 3. confirm-ветка  ────────────────────────────────────────────────
-            if choose_bt and is_confirm:
-                return await self.commit_box_selection(choose_bt, self.lang)
+            if setup_task_bxts and is_confirm:
+                return await self.commit_box_selection(setup_task, self.lang)
 
             # ── 4. box_type (enum) ───────────────────────────────────────────────
             if action not in BoxType._value2member_map_:
@@ -356,24 +357,21 @@ class TaskResponse(BaseHandlerExtensions):
 
             # ── 5. Обновление выбранных типов ─────────────────────────────────────
             selected_bt: list[int] = self.toggle_selection(
-                container=choose_bt.get("box_type", []),  # list[int]
+                container=setup_task.get("box_type", []),  # list[int]
                 key=box_type.value,  # BoxType → int / str
             )
 
-            # ── 6. Переход в следующее состояние ─────────────────────────────────
-            await state.set_state(TaskStates.context_data_choose_box_type)
-
-            # ── 7. Обновление словаря, с подставленными новыми значениями ────────
-            choose_bt = self._merge_choose_wh(
-                choose_wh,
+            # ── 6. Обновление словаря, с подставленными новыми значениями ────────
+            setup_task = self._merge_setup_task(
+                setup_task,
                 box_type=selected_bt,
             )
-            await state.update_data(choose_bt=choose_bt)
-            logging.warning(f"choose_bt: {choose_bt}\n choose_wh: {choose_wh}") # REMOVE
+            await state.update_data(setup_task=setup_task)
+            logging.warning(f"setup_task: {setup_task}") # REMOVE
 
-            # ── 6. Ответ пользователю ─────────────────────────────────
+            # ── 7. Ответ пользователю ─────────────────────────────────
             box_schema = ResponseBoxTypes(
-                selected=choose_bt.get('box_type', []),
+                selected=setup_task.get('box_type', []),
                 mode=mode
             )
             return self.format_response(
