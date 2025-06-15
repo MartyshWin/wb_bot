@@ -11,8 +11,9 @@ from datetime import datetime
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app.enums.constants import COEF_TITLES
 from app.enums.general import BoxType
-from app.schemas.general import ResponseWarehouses, ResponseBoxTypes
+from app.schemas.general import ResponseWarehouses, ResponseBoxTypes, ResponseCoefs
 
 
 # Кнопки должны получать язык приложения, чтобы соответствовать выбранному пользователем
@@ -322,6 +323,46 @@ class InlineKeyboardHandler:
     #         }],
     #     ])
 
+    # @staticmethod
+    # def coefs(
+    #         self,
+    #         coef: dict[int, int] | None = None,
+    #         back: bool = False,
+    #         warehouse_id: int = 0,
+    #         page: int = 0,
+    #         coef_default: str = ''
+    # ) -> InlineKeyboardMarkup:
+    #     coef = coef or {}
+    #     coef_map: dict[str, str] = {
+    #         f"coefs_{i}": "Бесплатные" if i == 0 else f"Коэф. до х{i}" for i in range(21)
+    #     }
+    #
+    #     selected = next((key for key, i in zip(coef_map, range(21)) if i in coef), '')
+    #
+    #     buttons: list[list[InlineKeyboardButton]] = []
+    #     row: list[InlineKeyboardButton] = []
+    #
+    #     for key, label in coef_map.items():
+    #         text = f"{'🟢 ' if key == selected else ''}{label}"
+    #         row.append(InlineKeyboardButton(text=text, callback_data=key))
+    #         if len(row) == 3:
+    #             buttons.append(row)
+    #             row = []
+    #
+    #     if row:
+    #         buttons.append(row)
+    #
+    #     if coef and (selected or str(next(iter(coef), '')) != coef_default):
+    #         buttons.append([InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="confirm_coef")])
+    #
+    #     back_data = f"task_update_select_{warehouse_id}_{page}" if back else "confirm_selection"
+    #     buttons.append([InlineKeyboardButton(text="Назад ↩️", callback_data=back_data)])
+    #
+    #     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
+    #   ► Создание навигационных клавиатур с указанием параметров
+    # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
     def box_type(
             self,
             data: ResponseBoxTypes,
@@ -357,42 +398,38 @@ class InlineKeyboardHandler:
         # --- сборка и возврат -------------------------------------------------------
         return self.build_kb(pairs, row_width=1, tail_rows=tail)
 
-    @staticmethod
+
     def coefs(
             self,
-            coef: dict[int, int] | None = None,
-            back: bool = False,
-            warehouse_id: int = 0,
-            page: int = 0,
-            coef_default: str = ''
+            data: ResponseCoefs,
     ) -> InlineKeyboardMarkup:
-        coef = coef or {}
-        coef_map: dict[str, str] = {
-            f"coefs_{i}": "Бесплатные" if i == 0 else f"Коэф. до х{i}" for i in range(21)
-        }
+        # --- шорткаты и маркеры --------------------------------------------------
+        selected = set(data.selected or [])  # отмеченные 0‥20
+        url = "coefs"  # префикс callback
+        url_back = f"task_mode_{data.mode}_confirm"  # «назад» по режиму
 
-        selected = next((key for key, i in zip(coef_map, range(21)) if i in coef), '')
+        # --- кнопки коэффициентов (21 шт., по 3 в строке) -----------------------
+        pairs: list[tuple[str, str]] = []
+        for coef_id, title in COEF_TITLES.items():  # 0 → "Бесплатные", …
+            bullet = "🟢 " if coef_id in selected else ""
+            cb_data = f"{url}_{coef_id}"
+            pairs.append((f"{bullet}{title}", cb_data))
 
-        buttons: list[list[InlineKeyboardButton]] = []
-        row: list[InlineKeyboardButton] = []
+        # --- «хвост» (confirm / back) -------------------------------------------
+        tail: list[list[tuple[str, str]]] = []
 
-        for key, label in coef_map.items():
-            text = f"{'🟢 ' if key == selected else ''}{label}"
-            row.append(InlineKeyboardButton(text=text, callback_data=key))
-            if len(row) == 3:
-                buttons.append(row)
-                row = []
+        # confirm – если выбор есть и он отличается от дефолта
+        if selected and list(selected) != [data.coef_default]:
+            tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
 
-        if row:
-            buttons.append(row)
+        back_cb = (
+            f"task_update_select_{data.warehouse_id}_{data.page}"
+            if data.back else url_back
+        )
+        tail.append([("Назад ↩️", back_cb)])
 
-        if coef and (selected or str(next(iter(coef), '')) != coef_default):
-            buttons.append([InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="confirm_coef")])
-
-        back_data = f"task_update_select_{warehouse_id}_{page}" if back else "confirm_selection"
-        buttons.append([InlineKeyboardButton(text="Назад ↩️", callback_data=back_data)])
-
-        return InlineKeyboardMarkup(inline_keyboard=buttons)
+        # --- сборка клавиатуры ---------------------------------------------------
+        return self.build_kb(pairs, row_width=3, tail_rows=tail)
 
 
     def create_warehouse_list(

@@ -11,8 +11,7 @@ from app.enums.constants import BOX_TITLES
 from app.enums.general import TaskMode, BoxType
 from app.keyboards.inline.general import InlineKeyboardHandler
 from app.routes.states.task_states import TaskStates
-from app.schemas.general import ResponseModel, ResponseBoxTypes
-
+from app.schemas.general import ResponseModel, ResponseBoxTypes, ResponseCoefs
 
 
 class TaskResponse(BaseHandlerExtensions):
@@ -194,13 +193,16 @@ class TaskResponse(BaseHandlerExtensions):
             for code in state_data.get('box_type')
         )
 
-        box_schema = ResponseBoxTypes(
-            selected=state_data.get('box_type', []),
-            mode=state_data.get('mode')
+        coef_schema = ResponseCoefs(
+            selected=state_data.get("coefs"),  # None или 0‥20
+            mode=state_data.get("mode", TaskMode.FLEX),
         )
         return self.format_response(
-            text=lang['selected_warehouse']["text"].format(selected_text=selected_warehouses),
-            keyboard=self.inline.box_type(box_schema)
+            text=lang['selected_box_type']["text"].format(
+                selected_text=selected_warehouses,
+                box=box
+            ),
+            keyboard = self.inline.coefs(coef_schema)
         )
 
     # ───────────────────────────── handlers ──────────────────────────────────────
@@ -376,7 +378,7 @@ class TaskResponse(BaseHandlerExtensions):
             )
             return self.format_response(
                 text=msg_text,
-                keyboard=self.inline.box_type(box_schema)
+                keyboard=self.inline.box_type(box_schema, BOX_TITLES)
             )
         except Exception as e:
             # Логирование для отладки

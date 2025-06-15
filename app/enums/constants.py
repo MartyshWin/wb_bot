@@ -7,3 +7,8 @@ BOX_TITLES: Final[dict[BoxType, str]] = {
     BoxType.SAFE: "Суперсейф",
     BoxType.PAN:  "Короба",
 }
+
+COEF_TITLES: Final[dict[int, str]] = {
+    0:  "Бесплатные",
+    **{i: f"Коэф. до х{i}" for i in range(1, 21)},   # 1‥20
+}
