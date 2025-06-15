@@ -2,6 +2,9 @@ from datetime import datetime, UTC
 from typing import Literal, Optional, Any
 from pydantic import BaseModel, Field
 
+from app.enums.general import TaskMode
+
+
 class ResponseModel(BaseModel):
     status: Literal[True] = Field(default=True, description="Флаг успешного ответа (фиксирован на True)")
     text: str = Field(description="Короткое сообщение для пользователя/клиента", examples=["Операция выполнена успешно"])
@@ -24,7 +27,6 @@ class ResponseError(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="ISO 8601 время (UTC)")
     trace_id: Optional[str] = Field(default=None, examples=["f5c1b1e0-4be1-48c7-b8f4-c5cdd7abc123"], description="Корреляционный ID для логов/трейсинга")
 
-
 class ResponseWarehouses(BaseModel):
     warehouses: list[dict[str, int | str]]
     mode: str
@@ -39,3 +41,11 @@ class ResponseWarehouses(BaseModel):
     @property
     def total_pages(self) -> int:  # 1-based
         return (self.total + self.limit - 1) // self.limit
+
+class ResponseBoxTypes(BaseModel):
+    selected: list[str] = Field(default_factory=list, description="Уже отмеченные типы")
+    back: bool = Field(default=False, description="Пришли из режима редактирования")
+    warehouse_id: int = Field(default=0, description="Бизнес-ID склада")
+    page: int = Field(default=0, ge=0, description="Индекс текущей страницы")
+    box_default: Optional[list[int]] = Field(default=None, description="Типы по умолчанию из задачи")
+    mode: TaskMode = Field(default=TaskMode.FLEX, description="flex / mass")
