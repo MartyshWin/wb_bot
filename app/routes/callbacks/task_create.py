@@ -90,7 +90,26 @@ async def box_type(callback_query: CallbackQuery, state: FSMContext):
         data = callback_query.data.split("_")
         user_lang = callback_query.from_user.language_code or "unknown"
 
-        response = await controller.handle_box_type(
+        response = await controller.handle_coefs(
+            callback_query.from_user.id,
+            callback_query.from_user.username,
+            callback_query.message.text,
+            user_lang,
+            data,
+            state
+        )
+        await callback_query.message.edit_text(response.text, reply_markup=response.kb)
+    except Exception as e:
+        logging.error("message:" + str(e), exc_info=True)
+
+
+@router.callback_query(F.data.startswith('select_date_'))
+async def box_type(callback_query: CallbackQuery, state: FSMContext):
+    try:
+        data = callback_query.data.split("_")
+        user_lang = callback_query.from_user.language_code or "unknown"
+
+        response = await controller.handle_date(
             callback_query.from_user.id,
             callback_query.from_user.username,
             callback_query.message.text,

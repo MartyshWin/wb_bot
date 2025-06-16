@@ -99,6 +99,8 @@ class InlineKeyboardHandler:
             [{"text": "🏠 Главное меню", "callback_data": "main"}],
         ])
 
+        self.select_date = self.create_select_date()
+
         # self.select_date: InlineKeyboardMarkup = self.create_select_date()
 
 
@@ -363,75 +365,8 @@ class InlineKeyboardHandler:
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
     #   ► Создание навигационных клавиатур с указанием параметров
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
-    def box_type(
-            self,
-            data: ResponseBoxTypes,
-            box_titles: dict[str, str]
-    ) -> InlineKeyboardMarkup:
-        # --- шорткаты и маркеры ----------------------------------------------------
-        selected = set(data.selected or [])  # отмеченные типы
-        checked = {i: "🟢 " for i in (selected or {})}  # зелёная точка у выбранных
-        url = "box_type"
-        url_back = f"task_mode_{data.mode}"  # префикс для callback
-
-        # --- кнопки типов коробок --------------------------------------------------
-        pairs: list[tuple[str, str]] = []
-        for bt in BoxType:  # Enum обеспечивает фикс. порядок
-            title = box_titles[bt]  # "Монопаллеты" / …
-            code = bt.value  # "mono" / "safe" / "pan"
-            bullet = "🟢 " if code in selected else ""  # зелёная метка
-            cb_data = f"{url}_{code}_{data.warehouse_id}_{data.page}"
-
-            pairs.append((f"{bullet}{title}", cb_data))
-
-        # --- хвостовые кнопки (confirm / back / pagination) ------------------------
-        tail: list[list[tuple[str, str]]] = []
-
-        # confirm – показываем, если выбор есть и он отличается от дефолта
-        if selected and (data.box_default or []) != list(selected):
-            tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
-
-        # назад
-        back_cb: str = f"task_update_select_{data.warehouse_id}_{data.page}" if data.back else url_back
-        tail.append([("Назад ↩️", back_cb)])
-
-        # --- сборка и возврат -------------------------------------------------------
-        return self.build_kb(pairs, row_width=1, tail_rows=tail)
-
-
-    def coefs(
-            self,
-            data: ResponseCoefs,
-    ) -> InlineKeyboardMarkup:
-        # --- шорткаты и маркеры --------------------------------------------------
-        selected = set(data.selected or [])  # отмеченные 0‥20
-        url = "coefs"  # префикс callback
-        url_back = f"task_mode_{data.mode}_confirm"  # «назад» по режиму
-
-        # --- кнопки коэффициентов (21 шт., по 3 в строке) -----------------------
-        pairs: list[tuple[str, str]] = []
-        for coef_id, title in COEF_TITLES.items():  # 0 → "Бесплатные", …
-            bullet = "🟢 " if coef_id in selected else ""
-            cb_data = f"{url}_{coef_id}"
-            pairs.append((f"{bullet}{title}", cb_data))
-
-        # --- «хвост» (confirm / back) -------------------------------------------
-        tail: list[list[tuple[str, str]]] = []
-
-        # confirm – если выбор есть и он отличается от дефолта
-        if selected and list(selected) != [data.coef_default]:
-            tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
-
-        back_cb = (
-            f"task_update_select_{data.warehouse_id}_{data.page}"
-            if data.back else url_back
-        )
-        tail.append([("Назад ↩️", back_cb)])
-
-        # --- сборка клавиатуры ---------------------------------------------------
-        return self.build_kb(pairs, row_width=3, tail_rows=tail)
-
-
+    # 🚛 ⚡ 🎯 📍
+    # Выбор складов
     def create_warehouse_list(
             self,
             page_data: ResponseWarehouses,
@@ -470,6 +405,112 @@ class InlineKeyboardHandler:
 
         # --- сборка --------------------------------------------------------------
         return self.build_kb(pairs, row_width=2, tail_rows=tail_rows)
+
+    # 📦 ✅
+    # Выбор типов коробок
+    def box_type(
+            self,
+            data: ResponseBoxTypes,
+            box_titles: dict[str, str]
+    ) -> InlineKeyboardMarkup:
+        # --- шорткаты и маркеры ----------------------------------------------------
+        selected = set(data.selected or [])  # отмеченные типы
+        checked = {i: "🟢 " for i in (selected or {})}  # зелёная точка у выбранных
+        url = "box_type"
+        url_back = f"task_mode_{data.mode}"  # возвращает к выбору складов
+
+        # --- кнопки типов коробок --------------------------------------------------
+        pairs: list[tuple[str, str]] = []
+        for bt in BoxType:  # Enum обеспечивает фикс. порядок
+            title = box_titles[bt]  # "Монопаллеты" / …
+            code = bt.value  # "mono" / "safe" / "pan"
+            bullet = "🟢 " if code in selected else ""  # зелёная метка
+            cb_data = f"{url}_{code}_{data.warehouse_id}_{data.page}"
+
+            pairs.append((f"{bullet}{title}", cb_data))
+
+        # --- хвостовые кнопки (confirm / back / pagination) ------------------------
+        tail: list[list[tuple[str, str]]] = []
+
+        # confirm – показываем, если выбор есть и он отличается от дефолта
+        if selected and (data.box_default or []) != list(selected):
+            tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
+
+        # назад
+        back_cb: str = f"task_update_select_{data.warehouse_id}_{data.page}" if data.back else url_back
+        tail.append([("Назад ↩️", back_cb)])
+
+        # --- сборка и возврат -------------------------------------------------------
+        return self.build_kb(pairs, row_width=1, tail_rows=tail)
+
+    # 🧮 📊
+    # Выбор коэффициентов
+    def coefs(
+            self,
+            data: ResponseCoefs,
+    ) -> InlineKeyboardMarkup:
+        # --- шорткаты и маркеры --------------------------------------------------
+        selected = data.selected                    # один-единственный int | None
+        url = "coefs"                               # префикс callback
+        url_back = f"task_mode_{data.mode}_confirm" # возвращает к выбору box-types
+
+        # --- кнопки коэффициентов (21 шт., по 3 в строке) -----------------------
+        pairs: list[tuple[str, str]] = []
+        for coef_id, title in COEF_TITLES.items():  # 0 → "Бесплатные", …
+            bullet = "🟢 " if coef_id == selected else ""
+            cb_data = f"{url}_{coef_id}"
+            pairs.append((f"{bullet}{title}", cb_data))
+
+        # --- «хвост» (confirm / back) -------------------------------------------
+        tail: list[list[tuple[str, str]]] = []
+
+        # confirm – если выбор есть и он отличается от дефолта
+        if selected is not None and selected != data.coef_default:
+            tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
+
+        back_cb = (
+            f"task_update_select_{data.warehouse_id}_{data.page}"
+            if data.back else url_back
+        )
+        tail.append([("Назад ↩️", back_cb)])
+
+        # --- сборка клавиатуры ---------------------------------------------------
+        return self.build_kb(pairs, row_width=3, tail_rows=tail)
+
+    # 📆 🕑
+    # Выбор даты поставки (периода времени)
+    def create_select_date(
+            self,
+            back: bool = False,
+            warehouse_id: int = 0,
+            page: int = 0
+    ) -> InlineKeyboardMarkup:
+        # --- шорткаты -----------------------------------------------------------
+        url = "select_date"  # базовый префикс
+        url_back = f"coefs_confirm"
+        # f"task_update_select_{warehouse_id}_{page}"
+
+        back_cb = (  # callback «Назад»
+            url_back
+            if back else "confirm_box_type"
+        )
+
+        # --- основные кнопки ----------------------------------------------------
+        pairs: list[tuple[str, str]] = [
+            ("Сегодня", f"{url}_today"),
+            ("Завтра", f"{url}_tomorrow"),
+            ("Неделя", f"{url}_week"),
+            ("Месяц", f"{url}_month"),
+            ("Выбрать на календаре", "select_diapason"),
+        ]
+
+        # --- «хвост» (только кнопка «Назад») ------------------------------------
+        tail = [[("Назад ↩️", back_cb)]]
+
+        # --- сборка и возврат ----------------------------------------------------
+        # row_width=2 → «Сегодня|Завтра», «Неделя|Месяц», «Календарь», «Назад»
+        return self.build_kb(pairs, row_width=2, tail_rows=tail)
+
 
     @staticmethod
     def create_alarm_list(
@@ -660,32 +701,6 @@ class InlineKeyboardHandler:
         ])
 
         return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-
-    def create_select_date(
-            self,
-            back: bool = False,
-            warehouse_id: int = 0,
-            page: int = 0
-    ) -> InlineKeyboardMarkup:
-        back_cb: str = (
-            f"task_update_select_{warehouse_id}_{page}"
-            if back else "confirm_box_type"
-        )
-
-        return self.build_inline_keyboard([
-            [
-                {"text": "Сегодня", "callback_data": "select_date_today"},
-                {"text": "Завтра", "callback_data": "select_date_tomorrow"},
-            ],
-            [
-                {"text": "Неделя", "callback_data": "select_date_week"},
-                {"text": "Месяц", "callback_data": "select_date_month"},
-            ],
-            [{"text": "Выбрать на календаре", "callback_data": "select_diapason"}],
-            [
-                {"text": "Назад ↩️", "callback_data": back_cb},
-            ],
-        ])
 
     @staticmethod
     def generate_pagination_keyboard(

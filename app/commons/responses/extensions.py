@@ -18,7 +18,7 @@ class BaseHandlerExtensions:
         text: str | dict[str, object],
         keyboard: object | None = None,
         array_activity: bool = False,
-        status: Literal[True] = True
+        status: bool = True
     ) -> ResponseModel:
         """
         Форматирует ответ с текстом и клавиатурой в виде словаря.

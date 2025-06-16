@@ -6,9 +6,10 @@ from app.enums.general import TaskMode
 
 
 class ResponseModel(BaseModel):
-    status: Literal[True] = Field(default=True, description="Флаг успешного ответа (фиксирован на True)")
+    status: bool = Field(default=True, description="Флаг успешного ответа (фиксирован на True)")
     text: str = Field(description="Короткое сообщение для пользователя/клиента", examples=["Операция выполнена успешно"])
     kb: Optional[Any] = Field(default=None, description="Клавиатура/меню", examples=["keyboard"])
+    type_edit: Optional[str] = Field(default=None, description="Тип редактирования")  # edit
 
 
 class ResponseError(BaseModel):
@@ -52,7 +53,7 @@ class ResponseBoxTypes(BaseModel):
 
 class ResponseCoefs(BaseModel):
     selected: Optional[conint(ge=0, le=20)] = Field(None, description="Выбранный коэффициент (0‥20) или None")
-    coef_default: conint(ge=0, le=20) = Field(0, description="Коэффициент по умолчанию из задачи")
+    coef_default: conint(ge=0, le=20) = Field(default=0, description="Коэффициент по умолчанию из задачи")
     back: bool = Field(default=False, description="Пришли из режима редактирования")
     warehouse_id: int = Field(default=0, description="Бизнес-ID склада")
     page: int = Field(default=0, ge=0, description="Индекс текущей страницы")

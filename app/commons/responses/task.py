@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from app.commons.responses.extensions import BaseHandlerExtensions, T
 from app.commons.services.task import TaskService
 from app.commons.utils.language_loader import load_language
-from app.enums.constants import BOX_TITLES
+from app.enums.constants import BOX_TITLES, COEF_TITLES
 from app.enums.general import TaskMode, BoxType
 from app.keyboards.inline.general import InlineKeyboardHandler
 from app.routes.states.task_states import TaskStates
@@ -193,7 +193,8 @@ class TaskResponse(BaseHandlerExtensions):
             for code in state_data.get('box_type')
         )
 
-        coef = None if state_data['coefs'] == '' else state_data['coefs']
+        raw = state_data['coefs']
+        coef = None if raw == '' or raw is None else raw
         coef_schema = ResponseCoefs(
             selected=coef,
             mode=state_data.get("mode"),
@@ -204,6 +205,36 @@ class TaskResponse(BaseHandlerExtensions):
                 box=box
             ),
             keyboard = self.inline.coefs(coef_schema)
+        )
+
+    async def commit_coefs_selection(
+            self,
+            state_data: dict,
+            lang: dict[str, dict[str, str]],
+    ) -> ResponseModel:
+        warehouses_list: list[dict[str, str | int]] = state_data.get('selected_list')
+        box_types: dict[str, str]
+
+        selected_warehouses = self.BULLET_HUBS.join(
+            f"<i>{wh['name']}</i>"
+            for wh in warehouses_list
+        )
+        box = self.BULLET_BOXES.join(
+            f"<i>{BOX_TITLES[code]}</i>"
+            for code in state_data.get('box_type')
+        )
+
+        raw = state_data['coefs']
+        coef = int(raw) if isinstance(raw, int) and raw else -1
+        coef_out = "Бесплатно" if coef == 0 else f"До <b>x{coef}</b>"
+
+        return self.format_response(
+            text=lang['selected_coefs']["text"].format(
+                selected_text=selected_warehouses,
+                box=box,
+                coef=coef_out
+            ),
+            keyboard = self.inline.select_date
         )
 
     # ───────────────────────────── handlers ──────────────────────────────────────
@@ -343,7 +374,7 @@ class TaskResponse(BaseHandlerExtensions):
             mode: TaskMode = setup_task['mode']
 
             # ── 2. Получение action и is_confirm из callback ─────────────────────
-            action = self.safe_get(data, 2)
+            action: int | str = self.safe_get(data, 2)
             is_confirm: bool = action.startswith("confirm")
 
             # ── 3. confirm-ветка  ────────────────────────────────────────────────
@@ -377,6 +408,71 @@ class TaskResponse(BaseHandlerExtensions):
             return self.format_response(
                 text=msg_text,
                 keyboard=self.inline.box_type(box_schema, BOX_TITLES)
+            )
+        except Exception as e:
+            # Логирование для отладки
+            logging.error(f"Error in handle_box_type: {e}", exc_info=True)
+            return self.format_response(self.lang['error_occurred'], self.inline.my_tasks_empty)
+
+    async def handle_coefs(
+            self,
+            user_id: int,
+            username: str,
+            msg_text: str,
+            code_lang: str,
+            data: list[str],
+            state: FSMContext
+    ) -> ResponseModel | None:
+        try:
+            self.lang = load_language(code_lang)
+
+            # ── 1. state (setup_task)  ────────────────────────────────────────────
+            # Создание машины состояний: FSMContext и базового словаря
+            state_data = await state.get_data()
+            setup_task: dict = state_data['setup_task'] # setup_task не может отсутствовать
+
+            # ── 1.1. Получаем mode, он не может отсутствовать
+            mode: TaskMode = setup_task['mode']
+
+            # ── 2. Получение action и is_confirm из callback ─────────────────────
+            # action - это и коэффициент и его подтверждение (а также может быть любое действие)
+            action: int | str = self.safe_get(data, 1)
+            is_confirm: bool = action.startswith("confirm")
+
+            # ── 3. confirm-ветка  ────────────────────────────────────────────────
+            if setup_task.get('coefs') and is_confirm:
+                return await self.commit_coefs_selection(setup_task, self.lang)
+
+            # ── 4. coefs (constants) ───────────────────────────────────────────────
+            if not str(action).isdigit():
+                raise ValueError(f"{action!r} не является целым числом")
+            action = int(action)
+
+            if action not in COEF_TITLES:
+                raise ValueError(f"Коэффициент {action!r} неизвестен")
+
+            # ── 5. Обновление выбранных типов ─────────────────────────────────────
+            if setup_task.get('coefs') == action:
+                coef = None
+            else:
+                coef = action
+
+            # ── 6. Обновление словаря, с подставленным новым значением ────────
+            setup_task = self._merge_setup_task(
+                setup_task,
+                coefs=coef,
+            )
+            await state.update_data(setup_task=setup_task)
+            logging.warning(f"setup_task: {setup_task}") # REMOVE
+
+            # ── 7. Ответ пользователю ─────────────────────────────────
+            coef_schema = ResponseCoefs(
+                selected=coef,
+                mode=mode,
+            )
+            return self.format_response(
+                text=msg_text,
+                keyboard=self.inline.coefs(coef_schema)
             )
         except Exception as e:
             # Логирование для отладки
