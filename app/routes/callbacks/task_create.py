@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery
 import logging
 
 from app.commons.responses.task import TaskResponse
+from app.commons.utils.template_callback import parse_cq, template_callback
 from app.keyboards.inline.general import InlineKeyboardHandler
 
 router = Router()
@@ -17,21 +18,21 @@ controller = TaskResponse(inline_handler=inline)
 #----------------------------------------#----------------------------------------
 @router.callback_query(F.data.startswith('create_task'))
 async def create_task_handler(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
-    try:
-        await state.clear()
-        data = callback_query.data.split("_")
-        user_lang = callback_query.from_user.language_code or "unknown"
+    await state.clear()
+    data, user_lang = await parse_cq(callback_query)
 
-        response = await controller.handle_create_task(
-            callback_query.from_user.id,
-            callback_query.from_user.username,
-            user_lang,
-            data
-        )
+    response = await controller.handle_create_task(
+        callback_query.from_user.id,
+        callback_query.from_user.username,
+        user_lang,
+        data
+    )
 
-        await callback_query.message.edit_text(response.text, reply_markup=inline.get_keyboard(response.kb))
-    except Exception as e:
-        logging.error("message:" + str(e), exc_info=True)
+    await template_callback(
+        callback_query, state, inline,
+        responses=response
+    )
+
 
 @router.callback_query(F.data.startswith('task_mode_'))
 async def task_mode(callback_query: CallbackQuery, state: FSMContext):
@@ -49,77 +50,79 @@ async def task_mode(callback_query: CallbackQuery, state: FSMContext):
     Возвращаемые данные:
     - Обновляет текст сообщения с кнопками для выбора складов.
     """
-    try:
-        data = callback_query.data.split("_")
-        user_lang = callback_query.from_user.language_code or "unknown"
+    data, user_lang = await parse_cq(callback_query)
 
-        response = await controller.handle_task_mode(
-            callback_query.from_user.id,
-            callback_query.from_user.username,
-            user_lang,
-            data,
-            state
-        )
-        await callback_query.message.edit_text(response.text, reply_markup=response.kb)
-    except Exception as e:
-        logging.error("message:" + str(e), exc_info=True)
+    response = await controller.handle_task_mode(
+        callback_query.from_user.id,
+        callback_query.from_user.username,
+        user_lang,
+        data,
+        state
+    )
+
+    await template_callback(
+        callback_query, state, inline,
+        responses=response
+    )
 
 
 @router.callback_query(F.data.startswith('box_type_'))
 async def box_type(callback_query: CallbackQuery, state: FSMContext):
-    try:
-        data = callback_query.data.split("_")
-        user_lang = callback_query.from_user.language_code or "unknown"
+    data, user_lang = await parse_cq(callback_query)
 
-        response = await controller.handle_box_type(
-            callback_query.from_user.id,
-            callback_query.from_user.username,
-            callback_query.message.text,
-            user_lang,
-            data,
-            state
-        )
-        await callback_query.message.edit_text(response.text, reply_markup=response.kb)
-    except Exception as e:
-        logging.error("message:" + str(e), exc_info=True)
+    response = await controller.handle_box_type(
+        callback_query.from_user.id,
+        callback_query.from_user.username,
+        callback_query.message.text,
+        user_lang,
+        data,
+        state
+    )
+
+    await template_callback(
+        callback_query, state, inline,
+        responses=response
+    )
 
 
 @router.callback_query(F.data.startswith('coefs_'))
-async def box_type(callback_query: CallbackQuery, state: FSMContext):
-    try:
-        data = callback_query.data.split("_")
-        user_lang = callback_query.from_user.language_code or "unknown"
+async def coefs(callback_query: CallbackQuery, state: FSMContext):
+    data, user_lang = await parse_cq(callback_query)
 
-        response = await controller.handle_coefs(
-            callback_query.from_user.id,
-            callback_query.from_user.username,
-            callback_query.message.text,
-            user_lang,
-            data,
-            state
-        )
-        await callback_query.message.edit_text(response.text, reply_markup=response.kb)
-    except Exception as e:
-        logging.error("message:" + str(e), exc_info=True)
+    response = await controller.handle_coefs(
+        callback_query.from_user.id,
+        callback_query.from_user.username,
+        callback_query.message.text,
+        user_lang,
+        data,
+        state
+    )
+
+    await template_callback(
+        callback_query, state, inline,
+        responses=response
+    )
 
 
 @router.callback_query(F.data.startswith('select_date_'))
-async def box_type(callback_query: CallbackQuery, state: FSMContext):
-    try:
-        data = callback_query.data.split("_")
-        user_lang = callback_query.from_user.language_code or "unknown"
+async def select_date(callback_query: CallbackQuery, state: FSMContext):
+    data, user_lang = await parse_cq(callback_query)
 
-        response = await controller.handle_date(
-            callback_query.from_user.id,
-            callback_query.from_user.username,
-            callback_query.message.text,
-            user_lang,
-            data,
-            state
-        )
-        await callback_query.message.edit_text(response.text, reply_markup=response.kb)
-    except Exception as e:
-        logging.error("message:" + str(e), exc_info=True)
+    response = await controller.handle_date(
+        callback_query.from_user.id,
+        callback_query.from_user.username,
+        callback_query.message.text,
+        user_lang,
+        data,
+        state
+    )
+
+    await template_callback(
+        callback_query, state, inline,
+        responses=response
+    )
+
+
 
 # @router.callback_query(
 #     F.state == Order.confirming,         # тот же эффект

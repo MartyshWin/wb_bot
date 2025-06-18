@@ -9,8 +9,9 @@ class ResponseModel(BaseModel):
     status: bool = Field(default=True, description="Флаг успешного ответа (фиксирован на True)")
     text: str = Field(description="Короткое сообщение для пользователя/клиента", examples=["Операция выполнена успешно"])
     kb: Optional[Any] = Field(default=None, description="Клавиатура/меню", examples=["keyboard"])
-    type_edit: Optional[str] = Field(default=None, description="Тип редактирования")  # edit
-
+    popup_text: Optional[str] = Field(default=None, description="Текст всплывающего окна")
+    popup_alert: Optional[bool] = Field(default=False, description="Всплывающее окно с подтверждением или без него")
+    type_edit: Optional[str] = Field(default=None, description="Тип редактирования (message или keyboard") # edit_message_reply_markup()
 
 class ResponseError(BaseModel):
     """

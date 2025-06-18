@@ -478,3 +478,68 @@ class TaskResponse(BaseHandlerExtensions):
             # Логирование для отладки
             logging.error(f"Error in handle_box_type: {e}", exc_info=True)
             return self.format_response(self.lang['error_occurred'], self.inline.my_tasks_empty)
+
+    async def handle_date(
+            self,
+            user_id: int,
+            username: str,
+            msg_text: str,
+            code_lang: str,
+            data: list[str],
+            state: FSMContext
+    ) -> ResponseModel | None:
+        try:
+            self.lang = load_language(code_lang)
+
+            # ── 1. state (setup_task)  ────────────────────────────────────────────
+            # Создание машины состояний: FSMContext и базового словаря
+            state_data = await state.get_data()
+            setup_task: dict = state_data['setup_task'] # setup_task не может отсутствовать
+
+            # ── 1.1. Получаем mode, он не может отсутствовать
+            mode: TaskMode = setup_task['mode']
+
+            # ── 2. Получение action и is_confirm из callback ─────────────────────
+            # action - это и коэффициент и его подтверждение (а также может быть любое действие)
+            action: int | str = self.safe_get(data, 2)
+            is_confirm: bool = action.startswith("confirm")
+
+            # ── 3. confirm-ветка  ────────────────────────────────────────────────
+            if setup_task.get('coefs') and is_confirm:
+                return await self.commit_coefs_selection(setup_task, self.lang)
+
+            # ── 4. coefs (constants) ───────────────────────────────────────────────
+            if not str(action).isdigit():
+                raise ValueError(f"{action!r} не является целым числом")
+            action = int(action)
+
+            if action not in COEF_TITLES:
+                raise ValueError(f"Коэффициент {action!r} неизвестен")
+
+            # ── 5. Обновление выбранных типов ─────────────────────────────────────
+            if setup_task.get('coefs') == action:
+                coef = None
+            else:
+                coef = action
+
+            # ── 6. Обновление словаря, с подставленным новым значением ────────
+            setup_task = self._merge_setup_task(
+                setup_task,
+                coefs=coef,
+            )
+            await state.update_data(setup_task=setup_task)
+            logging.warning(f"setup_task: {setup_task}") # REMOVE
+
+            # ── 7. Ответ пользователю ─────────────────────────────────
+            coef_schema = ResponseCoefs(
+                selected=coef,
+                mode=mode,
+            )
+            return self.format_response(
+                text=msg_text,
+                keyboard=self.inline.coefs(coef_schema)
+            )
+        except Exception as e:
+            # Логирование для отладки
+            logging.error(f"Error in handle_box_type: {e}", exc_info=True)
+            return self.format_response(self.lang['error_occurred'], self.inline.my_tasks_empty)
