@@ -3,6 +3,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base_schema import BaseSchema
+
 
 #----------------------------------------#----------------------------------------
 # Warehouse – Pydantic-схемы
@@ -33,7 +35,7 @@ class WarehouseUpdate(BaseModel):
     pass
 
 # Схема для отдачи наружу (read-only).
-class WarehouseRead(BaseModel):
+class WarehouseRead(BaseSchema):
     id: int
     warehouse_id: int
     warehouse_name: str

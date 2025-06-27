@@ -56,7 +56,7 @@ async def get_warehouses_name_map(
     """
     rows = await get_warehouses_by_ids(session, warehouse_ids)
     return [
-        {"warehouse_id": w.warehouse_id, "warehouse_name": w.warehouse_name}
+        {"id": w.warehouse_id, "name": w.warehouse_name}
         for w in rows
     ]
 

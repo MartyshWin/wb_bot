@@ -1,8 +1,10 @@
 from datetime import datetime, UTC
-from typing import Literal, Optional, Any
+from typing import Literal, Optional, Any, Union
 from pydantic import BaseModel, Field, conint
 
 from app.enums.general import TaskMode
+from app.schemas.task import TaskRead
+from app.schemas.warehouse import WarehouseRead
 
 
 class ResponseModel(BaseModel):
@@ -11,7 +13,7 @@ class ResponseModel(BaseModel):
     kb: Optional[Any] = Field(default=None, description="Клавиатура/меню", examples=["keyboard"])
     popup_text: Optional[str] = Field(default=None, description="Текст всплывающего окна")
     popup_alert: Optional[bool] = Field(default=False, description="Всплывающее окно с подтверждением или без него")
-    type_edit: Optional[str] = Field(default=None, description="Тип редактирования (message или keyboard") # edit_message_reply_markup()
+    type_edit: Optional[str] = Field(default=None, description="Тип редактирования (message или keyboard)") # edit_message_reply_markup()
 
 class ResponseError(BaseModel):
     """
@@ -30,11 +32,27 @@ class ResponseError(BaseModel):
     trace_id: Optional[str] = Field(default=None, examples=["f5c1b1e0-4be1-48c7-b8f4-c5cdd7abc123"], description="Корреляционный ID для логов/трейсинга")
 
 class ResponseWarehouses(BaseModel):
-    warehouses: list[dict[str, int | str]]
-    mode: str
+    warehouses: Union[list[dict[str, int | str]], list[WarehouseRead]]
+    mode: Optional[str] = None
     offset: int = Field(..., ge=0, description="Сколько записей пропустить от начала")
     limit: int = Field(..., gt=0, description="Размер страницы")
     total: int = Field(..., ge=0, description="Сколько всего складов")
+    task_list: Optional[list[dict[str, int | bool]]] = None
+
+    @property
+    def page_index(self) -> int:  # 0-based
+        return self.offset // self.limit
+
+    @property
+    def total_pages(self) -> int:  # 1-based
+        return (self.total + self.limit - 1) // self.limit
+
+class ResponseTasks(BaseModel):
+    tasks: list[TaskRead]
+
+    offset: int = Field(..., ge=0, description="Сколько записей пропустить от начала")
+    limit: int = Field(..., gt=0, description="Размер страницы")
+    total: int = Field(..., ge=0, description="Сколько всего задач")
 
     @property
     def page_index(self) -> int:  # 0-based

@@ -1,3 +1,5 @@
+import logging
+
 from .extensions import BaseHandlerExtensions
 from ..services.user import UserService
 from ..utils.language_loader import load_language
@@ -25,6 +27,7 @@ class GeneralResponse(BaseHandlerExtensions):
                 keyboard='start_kb'
             )
         except Exception as e:
+            logging.error(f"Error in start_command_response: {e}", exc_info=True)
             return self.format_response(self.lang['error_occurred'])
 
 

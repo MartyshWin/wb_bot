@@ -1,4 +1,5 @@
 # Tasks
+import logging
 from typing import Sequence, Any, Optional
 
 from sqlalchemy import select, update, delete, exists, func, distinct, text
@@ -53,12 +54,83 @@ async def get_tasks_by_user_max_coef(
     result = await session.scalars(stmt)
     return result.all()
 
+async def get_tasks_by_user_with_limit(
+    session: AsyncSession,
+    user_id: int,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> Sequence[Task]:
+    """Возвращает задачи только по 10 (или другим лимитом) уникальным складам,
+    и для каждой пары (warehouse_id, box_type_id) берёт запись с максимальным коэффициентом."""
+
+    # Шаг 1: Получаем уникальные warehouse_id с лимитом
+    wh_stmt = (
+        select(distinct(Task.warehouse_id))
+        .where(Task.user_id == user_id)
+        .order_by(Task.warehouse_id)
+    )
+
+    if limit is not None:
+        wh_stmt = wh_stmt.limit(limit)
+    if offset is not None:
+        wh_stmt = wh_stmt.offset(offset)
+
+    result = await session.execute(wh_stmt)
+    warehouse_ids = [row[0] for row in result.all()]
+
+    if not warehouse_ids:
+        return []
+
+    # Шаг 2: Получаем задачи с максимальным коэффициентом для каждой (warehouse, box_type) из выбранных складов
+    subq = (
+        select(
+            Task.id,
+            func.rank().over(
+                partition_by=(Task.warehouse_id, Task.box_type_id),
+                order_by=Task.coefficient.desc()
+            ).label("rnk")
+        )
+        .where(
+            Task.user_id == user_id,
+            Task.warehouse_id.in_(warehouse_ids)
+        )
+        .subquery()
+    )
+
+    stmt = (
+        select(Task)
+        .join(subq, Task.id == subq.c.id)
+        .where(subq.c.rnk == 1)
+    )
+
+    result = await session.scalars(stmt)
+    return result.all()
+
 
 async def get_unique_warehouses(session: AsyncSession, user_id: int) -> list[int]:
     """ID уникальных складов пользователя."""
     stmt = select(distinct(Task.warehouse_id)).where(Task.user_id == user_id)
     rows = await session.execute(stmt)
     return [row[0] for row in rows.fetchall()]
+
+async def get_warehouses_with_alarm(session: AsyncSession, user_id: int) -> list[dict[str, int | bool]]:
+    """
+    Возвращает список складов пользователя с их флагом alarm.
+    Пример: [{'warehouse_id': 123, 'alarm': True}, ...]
+    """
+    stmt = (
+        select(Task.warehouse_id, Task.alarm)
+        .where(Task.user_id == user_id)
+        .group_by(Task.warehouse_id, Task.alarm)  # группируем, если есть дубли
+    )
+    rows = await session.execute(stmt)
+    return [{"id": wid, "alarm": alarm} for wid, alarm in rows.fetchall()]
+
+async def count_unique_warehouses(session: AsyncSession, user_id: int) -> int:
+    """Количество уникальных складов у пользователя."""
+    stmt = select(func.count(distinct(Task.warehouse_id))).where(Task.user_id == user_id)
+    result = await session.execute(stmt)
+    return result.scalar_one()
 
 
 async def get_task_field(session: AsyncSession, task_id: int, field_name: str) -> Any | None:
@@ -80,8 +152,9 @@ async def create_task(session: AsyncSession, data: TaskCreate) -> Optional[Task]
         await session.commit()
         await session.refresh(task)
         return task
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         await session.rollback()
+        logging.error(f"Ошибка при создании задачи: {e}", exc_info=True)
         return None
 
 # ---------------------------------------------------------------------------

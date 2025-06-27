@@ -23,38 +23,62 @@ async def template_callback(
     """
     Универсальный обработчик:
     • принимает 1 или несколько ResponseModel;
+    • у `ResponseModel.type_edit` два режима:
+        - "message"  → `edit_text()` (текст + клавиатура);
+        - "keyboard" → `edit_reply_markup()` (только клавиатура).
+      По умолчанию "message".
     • первый ответ редактирует исходное сообщение,
       остальные — отправляет новыми.
     """
     try:
         # ── 1. нормализуем вход до списка моделей ──────────────────────
-        resp_list: Sequence[ResponseModel] = (
-            list(responses)  # Iterable → list[…]
-            if isinstance(responses, Iterable)
-               and not isinstance(responses, (ResponseModel, str, bytes, dict))
-            else [responses]  # одиночный ResponseModel
-        )
+        resp_list: list[ResponseModel]
+        if isinstance(responses, ResponseModel):
+            resp_list = [responses] # одиночный ResponseModel
+        elif isinstance(responses, Iterable):
+            resp_list = [r for r in responses if r is not None]
+            if not all(isinstance(r, ResponseModel) for r in resp_list):
+                raise TypeError("template_callback: ожидался ResponseModel")
+        else:
+            raise TypeError(f"template_callback: unsupported type {type(responses)!r}")
+
         if not resp_list:  # пусто → ничего не шлём
             return
 
-        # ── 2. первый ответ → edit_text ───────────────────────────────
+        # ── 3. первый ответ → edit_text ───────────────────────────────
         first = resp_list[0]
+        kb = None
+        if not first.kb is None:
+            kb: InlineKeyboardMarkup | None = await resolve_kb(first.kb, inline)
+
+        # ── 3.1. если popup (first) → показываем его ──────────────────────────────
         if first.popup_text:
             await cq.answer(first.popup_text, show_alert=first.popup_alert)
+        # -----------------------------
 
-        # ── 2.1. проверяем клавиатуру ───────────────────────────────
-        kb = await resolve_kb(first.kb, inline)
-        await cq.message.edit_text(first.text, reply_markup=kb)
+        if first.text != '':
+            if first.type_edit == "keyboard":  # только поменять КБ
+                await cq.message.edit_reply_markup(reply_markup=kb)
+            else:  # полное редактирование
+                await cq.message.edit_text(first.text, reply_markup=kb)
 
-        # ── 3. остальные ответы → send_message ────────────────────────
+        # ── 4. остальные ответы → новые сообщения -----------------------------
         for resp in resp_list[1:]:
+            kb = None
+            if not resp.kb is None:
+                kb = await resolve_kb(resp.kb, inline)
+
+            # ── 4.1. если popup (other) → показываем его ──────────────────────────────
             if resp.popup_text:
                 await cq.answer(resp.popup_text, show_alert=resp.popup_alert)
 
-            # ── 3.1. проверяем клавиатуру ───────────────────────────────
-            kb = await resolve_kb(resp.kb, inline)
-            await cq.message.answer(resp.text, reply_markup=kb)
-
+            # если нужно редактировать КБ предыдущего сообщения,
+            # а не создавать новое – проверяем type_edit
+            if first.text != '':
+                if resp.type_edit == "keyboard":
+                    await cq.message.edit_reply_markup(reply_markup=kb)
+                else:
+                    await cq.message.answer(resp.text, reply_markup=kb)
     except Exception as e:
         logging.error(f"template_callback error: {e}", exc_info=True)
 
@@ -66,7 +90,7 @@ async def parse_cq(cq: CallbackQuery):
     • user_lang  – язык пользователя или 'unknown'
     """
     data = cq.data.split("_")
-    user_lang = cq.from_user.language_code or "unknown"
+    user_lang = cq.from_user.language_code or "ru" # or "unknown"
     return data, user_lang
 
 async def resolve_kb(kb_like: KBLike, inline: InlineKeyboardHandler) -> InlineKeyboardMarkup:

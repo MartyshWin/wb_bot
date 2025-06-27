@@ -42,19 +42,24 @@ class InlineKeyboardHandler:
         ])
 
         self.delete_confirm: InlineKeyboardMarkup = self.build_inline_keyboard([
-            [{"text": "Да", "callback_data": "tasks_update_all"}],
+            [{"text": "Да", "callback_data": "task_delete_all"}], # tasks_update_all
             [{"text": "Отмена", "callback_data": "main"}],
         ])
 
-        self.search_slot_mass: InlineKeyboardMarkup = self.build_inline_keyboard([
-            [{"text": "🚀 Отправить в работу", "callback_data": "task_save"}],
+        self.tasks_delete_all: InlineKeyboardMarkup = self.build_inline_keyboard([
+            [{"text": "♻️ Создать новый список", "callback_data": "create_task"}],
             [{"text": "🏠 Главное меню", "callback_data": "main"}],
         ])
 
-        self.search_slot_flex: InlineKeyboardMarkup = self.build_inline_keyboard([
-            [{"text": "🚀 Отправить в работу", "callback_data": "task_save"}],
-            [{"text": "🏠 Главное меню", "callback_data": "main"}],
-        ])
+        # self.search_slot_mass: InlineKeyboardMarkup = self.build_inline_keyboard([
+        #     [{"text": "🚀 Отправить в работу", "callback_data": "task_save"}],
+        #     [{"text": "🏠 Главное меню", "callback_data": "main"}],
+        # ])
+        #
+        # self.search_slot_flex: InlineKeyboardMarkup = self.build_inline_keyboard([
+        #     [{"text": "🚀 Отправить в работу", "callback_data": "task_save"}],
+        #     [{"text": "🏠 Главное меню", "callback_data": "main"}],
+        # ])
 
         self.subscribe: InlineKeyboardMarkup = self.build_inline_keyboard([
             [{"text": "💳 Оформить подписку", "callback_data": "choose_tariff"}],
@@ -253,7 +258,6 @@ class InlineKeyboardHandler:
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
     #   ► Создание клавиатур с указанием параметров
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
-    @staticmethod
     # create_invoice() -> create_billing()
     def create_billing(self, link_pay: str, payment_id: str) -> InlineKeyboardMarkup:
         return self.build_inline_keyboard([
@@ -263,25 +267,22 @@ class InlineKeyboardHandler:
             [{"text": "🏠 Главное меню", "callback_data": "choose_tariff"}],
         ])
 
-    @staticmethod
     def cancel_subscription(self, payment_id: str) -> InlineKeyboardMarkup:
         return self.build_inline_keyboard([
             [{"text": "⛔️ Отменить подписку", "callback_data": "cancel_subscription_" + payment_id}],
             [{"text": "Назад ↩️", "callback_data": "choose_tariff"}],
         ])
 
-    @staticmethod
     def verify_invoice(self, payment_id: str) -> InlineKeyboardMarkup:
         return self.build_inline_keyboard([
             [{"text": "🔄 Проверить платеж", "callback_data": "check_pay_" + payment_id}],
             [{"text": "🏠 Главное меню", "callback_data": "choose_tariff"}],
         ])
 
-    @staticmethod
-    def save_params(self, payment_id: str) -> InlineKeyboardMarkup:
+    def save_params(self) -> InlineKeyboardMarkup:
         return self.build_inline_keyboard([
             [{"text": "🚀 Отправить в работу", "callback_data": "task_save"}],
-            [{"text": "Назад ↩️", "callback_data": "select_diapason_back"}],
+            [{"text": "Назад ↩️", "callback_data": "coefs_confirm"}],
         ])
     # 〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰〰
     #   ► Создание навигационных клавиатур с указанием параметров
@@ -465,7 +466,7 @@ class InlineKeyboardHandler:
         tail: list[list[tuple[str, str]]] = []
 
         # confirm – если выбор есть и он отличается от дефолта
-        if selected is not None and selected != data.coef_default:
+        if selected is not None:
             tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
 
         back_cb = (
@@ -511,48 +512,88 @@ class InlineKeyboardHandler:
         # row_width=2 → «Сегодня|Завтра», «Неделя|Месяц», «Календарь», «Назад»
         return self.build_kb(pairs, row_width=2, tail_rows=tail)
 
-
-    @staticmethod
     def create_alarm_list(
             self,
-            warehouses: list[dict[str, int | str]],
-            alarm_status: dict[int, bool],
-            page: int,
-            total_pages: int
+            page_data: ResponseWarehouses,
     ) -> InlineKeyboardMarkup:
-        buttons: list[list[InlineKeyboardButton]] = []
-        row: list[InlineKeyboardButton] = []
+        # --- данные из модели: Парсинг Pydantic модели --------------------------
+        warehouses = page_data.warehouses
+        page: int = page_data.page_index
+        total_pages = page_data.total_pages
+        alarm_status: dict[int, bool] = {item['id']: item['alarm'] for item in page_data.task_list}
 
+        # --- основная сетка кнопок (по 2 в ряд) -------------------------------------
+        pairs: list[tuple[str, str]] = []
         for warehouse in warehouses:
             wid = warehouse["id"]
-            name = f"{'🔔' if alarm_status.get(wid) else '🔕'} {warehouse['name']}"
-            row.append(InlineKeyboardButton(text=name, callback_data=f"toggle_alarm_{wid}_{page}"))
+            name = warehouse["name"]
+            icon = "🔔" if alarm_status.get(wid) else "🔕"
+            label = f"{icon} {name}"
+            pairs.append((label, f"toggle_alarm_{wid}_{page}"))
 
-            if len(row) == 2:
-                buttons.append(row)
-                row = []
+        # --- «хвост» (пагинация + действия + назад) ---------------------------------
+        tail_rows: list[list[tuple[str, str]]] = []
+        pagination: list[tuple[str, str]] = []
 
-        if row:
-            buttons.append(row)
+        # мы предусматриваем, что стоит ограничение в 30 складов, поэтому пагинации не требуется:
 
-        pagination: list[InlineKeyboardButton] = []
-        if page > 0:
-            pagination.append(InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"alarm_page_{page - 1}"))
-        if page < total_pages - 1:
-            pagination.append(InlineKeyboardButton(text="Следующая ➡️", callback_data=f"alarm_page_{page + 1}"))
-        if pagination:
-            buttons.append(pagination)
+        # if page > 0:
+        #     pagination.append(("⬅️ Предыдущая", f"alarm_edit_{page - 1}"))
+        # if page < total_pages - 1:
+        #     pagination.append(("Следующая ➡️", f"alarm_edit_{page + 1}"))
+        # if pagination:
+        #     tail_rows.append(pagination)
 
         if warehouses:
-            buttons.append([
-                InlineKeyboardButton(text="Включить для всех", callback_data="alarm_all_on")
-            ])
-            buttons.append([
-                InlineKeyboardButton(text="Отключить для всех", callback_data="alarm_all_off")
-            ])
+            tail_rows.append([("Включить для всех", "alarm_all_on")])
+            tail_rows.append([("Отключить для всех", "alarm_all_off")])
 
-        buttons.append([InlineKeyboardButton(text="Назад ↩️", callback_data="alarm_setting")])
-        return InlineKeyboardMarkup(inline_keyboard=buttons)
+        tail_rows.append([("Назад ↩️", "alarm_setting")])
+
+        # --- сборка -----------------------------------------------------------------
+        return self.build_kb(pairs, row_width=2, tail_rows=tail_rows)
+
+    # @staticmethod
+    # def create_alarm_list(
+    #         self,
+    #         warehouses: list[dict[str, int | str]],
+    #         alarm_status: dict[int, bool],
+    #         page: int,
+    #         total_pages: int
+    # ) -> InlineKeyboardMarkup:
+    #     buttons: list[list[InlineKeyboardButton]] = []
+    #     row: list[InlineKeyboardButton] = []
+    #
+    #     for warehouse in warehouses:
+    #         wid = warehouse["id"]
+    #         name = f"{'🔔' if alarm_status.get(wid) else '🔕'} {warehouse['name']}"
+    #         row.append(InlineKeyboardButton(text=name, callback_data=f"toggle_alarm_{wid}_{page}"))
+    #
+    #         if len(row) == 2:
+    #             buttons.append(row)
+    #             row = []
+    #
+    #     if row:
+    #         buttons.append(row)
+    #
+    #     pagination: list[InlineKeyboardButton] = []
+    #     if page > 0:
+    #         pagination.append(InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"alarm_page_{page - 1}"))
+    #     if page < total_pages - 1:
+    #         pagination.append(InlineKeyboardButton(text="Следующая ➡️", callback_data=f"alarm_page_{page + 1}"))
+    #     if pagination:
+    #         buttons.append(pagination)
+    #
+    #     if warehouses:
+    #         buttons.append([
+    #             InlineKeyboardButton(text="Включить для всех", callback_data="alarm_all_on")
+    #         ])
+    #         buttons.append([
+    #             InlineKeyboardButton(text="Отключить для всех", callback_data="alarm_all_off")
+    #         ])
+    #
+    #     buttons.append([InlineKeyboardButton(text="Назад ↩️", callback_data="alarm_setting")])
+    #     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
     @staticmethod
     def create_task_list(
@@ -618,93 +659,99 @@ class InlineKeyboardHandler:
         ])
 
     @staticmethod
+
     def generate_calendar(
-            self,
-            selected_year: int | None = None,
-            selected_month: int | None = None,
-            selected_day: int | None = None,
-            status_end: bool = False
+        *,
+        year: int | None = None,  # выбранный год   (None → текущий)
+        month: int | None = None,  # выбранный месяц (None → текущий)
+        highlight_day: int | None = None,  # «выбранный» день (None → нет)
+        confirm: bool = False,  # показать кнопку «Подтвердить выбор»
     ) -> InlineKeyboardMarkup:
-        if selected_year is None:
-            selected_year = datetime.now().year
-        if selected_month is None:
-            selected_month = datetime.now().month
+        """
+        Генерирует инлайн-календарь одного месяца.
 
+        ┌───────────────┐
+        │  [Май 2025]   │
+        │ Пн Вт Ср Чт … │
+        │  1  2  3 ...  │
+        │               │
+        │ ◀️ Сегодня ▶️ │
+        │   Подтвердить │  (если confirm=True)
+        │      Назад    │
+        └───────────────┘
+        """
+        # ── 0. дата по умолчанию ------------------------------------------
+        today = datetime.now()
+        year = year or today.year
+        month = month or today.month
+        highlight_day = highlight_day or today.day
+
+        # ── 1. заголовок и дни недели -------------------------------------
         # Можно использовать локализованные названия месяцев:
-        month_names: list[str] = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн",
-                       "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
-        days_of_week: list[str] = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-        month_name: str = month_names[selected_month - 1]
-
-        inline_keyboard: list[list[InlineKeyboardButton]] = [
-            [# Заголовок (Месяц Год)
-                InlineKeyboardButton(text=f"[{month_name} {selected_year}]", callback_data="ignore")
-            ],
-            [  # Дни недели
-                InlineKeyboardButton(text=day, callback_data="ignore") for day in days_of_week
-            ]
+        MONTHS: list[str] = [
+            "Янв", "Фев", "Мар", "Апр", "Май", "Июн",
+            "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"
+        ]
+        WEEKDAYS: list[str] = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+        kb: list[list[InlineKeyboardButton]] = [
+            # месяц + год
+            [InlineKeyboardButton(text=f"[{MONTHS[month - 1]} {year}]", callback_data="ignore")],
+            # шапка дней недели
+            [InlineKeyboardButton(text=day, callback_data="ignore") for day in WEEKDAYS],
         ]
 
-        # Календарь месяца
-        month_calendar = calendar.monthcalendar(selected_year, selected_month)
-        for week in month_calendar:
-            row = []
+        # ── 2. сетка дней ---------------------------------------------------
+        for week in calendar.monthcalendar(year, month):
+            row: list[InlineKeyboardButton] = []
             for day in week:
-                if day == 0:
+                if day == 0:  # пустая ячейка
                     row.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
-                else:
-                    if day == datetime.now().day and selected_month == datetime.now().month and selected_year == datetime.now().year:
-                        row.append(
-                            InlineKeyboardButton(
-                                text=f"❗{str(day)}❗️",
-                                callback_data=f"select_day_{selected_year}_{selected_month}_{day}"
-                            )
-                        )
-                    else:
-                        row.append(
-                            InlineKeyboardButton(
-                                text=str(day),
-                                callback_data=f"select_day_{selected_year}_{selected_month}_{day}"
-                            )
-                        )
-            inline_keyboard.append(row)
+                    continue
 
+                # подсветка «сегодня» или выбранного дня
+                mark = "❗" if (
+                        day == highlight_day and
+                        month == today.month and
+                        year == today.year
+                ) else ""
+
+                row.append(
+                    InlineKeyboardButton(
+                        text=f"{mark}{day}{mark}",
+                        callback_data=f"select_day_{year}_{month}_{day}"
+                    )
+                )
+            kb.append(row)
+
+        # ── 3. навигация месяц назад / сегодня / месяц вперёд --------------
         # Определение предыдущего и следующего месяца
-        prev_month = selected_month - 1 if selected_month > 1 else 12
-        next_month = selected_month + 1 if selected_month < 12 else 1
-        prev_year = selected_year if selected_month > 1 else selected_year - 1
-        next_year = selected_year if selected_month < 12 else selected_year + 1
+        prev_m = month - 1 or 12
+        next_m = month + 1 if month < 12 else 1
+        prev_y = year - 1 if month == 1 else year
+        next_y = year + 1 if month == 12 else year
 
         # Нижний ряд кнопок: назад по месяцу, сегодня, вперёд по месяцу
-        inline_keyboard.append([
-            InlineKeyboardButton(
-                text="⬅️", callback_data=f"change_month_{prev_year}_{prev_month}"
-            ),
+        kb.append([
+            InlineKeyboardButton(text="⬅️", callback_data=f"change_month_{prev_y}_{prev_m}"),
             InlineKeyboardButton(
                 text="Сегодня",
-                callback_data=f"select_day_{datetime.now().year}_{datetime.now().month}_{datetime.now().day}"
+                callback_data=f"select_day_{today.year}_{today.month}_{today.day}"
             ),
-            InlineKeyboardButton(
-                text="➡️", callback_data=f"change_month_{next_year}_{next_month}"
-            )
+            InlineKeyboardButton(text="➡️", callback_data=f"change_month_{next_y}_{next_m}"),
         ])
 
-        if status_end:
-            # Кнопка "Подтвердить выбор"
-            inline_keyboard.append([
-                InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="confirm_date")
-            ])
+        # ── 4. confirm / back ----------------------------------------------
+        if confirm:
+            kb.append([InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="date_confirm")])
 
         # Кнопка "Назад"
-        inline_keyboard.append([
-            InlineKeyboardButton(text="Назад ↩️", callback_data="confirm_coef")
-        ])
+        kb.append([InlineKeyboardButton(text="Назад ↩️", callback_data="coefs_confirm")])
 
-        return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+        # ── 5. возврат -------------------------------------------------------
+        return InlineKeyboardMarkup(inline_keyboard=kb)
 
     @staticmethod
     def generate_pagination_keyboard(
-            self,
             current_page: int,
             total_tasks: int,
             page_size: int = 5,

@@ -1,18 +1,27 @@
 import logging
-from typing import Any, Coroutine
-
 from sqlalchemy.exc import SQLAlchemyError
 
+# Импортируем типизацию
+from typing import Any, Coroutine, Sequence, Union, Literal, Optional
+
+# Импортируем родительский класс, расширяя его
 from .extensions import BaseHandlerExtensions
-from ..utils.language_loader import load_language
-from app.schemas.general import ResponseModel
+
+# Импортируем enums модели и константы
+from ...enums.constants import BOX_TYPE_MAP
+
+# Импортируем Хэлпер для алхимии, предоставляет доступ к базе
 from ...models.alchemy_helper import db_helper
-from ...models.crud.clients import user_exists_by_id, create_user
+
+# Импортируем pydantic модели
 from ...schemas.user import UserRead, UserCreate
+from app.schemas.general import ResponseModel, ResponseWarehouses, ResponseError, ResponseTasks
+
+# Импортируем crud модели целиком
+from ...models.crud import clients
 
 
-# from ...schemas.general import ResponseModel
-
+#----------------------------------------#----------------------------------------#
 class UserService(BaseHandlerExtensions):
     def __init__(self):
         super().__init__()
@@ -20,8 +29,8 @@ class UserService(BaseHandlerExtensions):
     @staticmethod
     async def user_exists(user_id: int) -> bool:
         try:
-            async for session in db_helper.session_getter():
-                return await user_exists_by_id(session, user_id)
+            async with db_helper.session_getter() as session:
+                return await clients.user_exists_by_id(session, user_id)
         except SQLAlchemyError as e:
             logging.error(f"Ошибка при проверке пользователя {user_id}: {e}", exc_info=True)
             return False
@@ -35,8 +44,8 @@ class UserService(BaseHandlerExtensions):
                 activity="start",
                 bot_status=False,
             )
-            async for session in db_helper.session_getter():
-                created_user = await create_user(session, user_data)
+            async with db_helper.session_getter() as session:
+                created_user = await clients.create_user(session, user_data)
                 return UserRead.model_validate(created_user)  # Преобразуем ORM → Pydantic
         except SQLAlchemyError as e:
             logging.error(f"Ошибка при создании пользователя {user_id}: {e}", exc_info=True)

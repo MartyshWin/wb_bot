@@ -22,8 +22,7 @@ async def create_task_handler(callback_query: CallbackQuery, state: FSMContext) 
     data, user_lang = await parse_cq(callback_query)
 
     response = await controller.handle_create_task(
-        callback_query.from_user.id,
-        callback_query.from_user.username,
+        callback_query,
         user_lang,
         data
     )
@@ -53,13 +52,11 @@ async def task_mode(callback_query: CallbackQuery, state: FSMContext):
     data, user_lang = await parse_cq(callback_query)
 
     response = await controller.handle_task_mode(
-        callback_query.from_user.id,
-        callback_query.from_user.username,
+        callback_query,
         user_lang,
         data,
         state
     )
-
     await template_callback(
         callback_query, state, inline,
         responses=response
@@ -71,14 +68,11 @@ async def box_type(callback_query: CallbackQuery, state: FSMContext):
     data, user_lang = await parse_cq(callback_query)
 
     response = await controller.handle_box_type(
-        callback_query.from_user.id,
-        callback_query.from_user.username,
-        callback_query.message.text,
+        callback_query,
         user_lang,
         data,
         state
     )
-
     await template_callback(
         callback_query, state, inline,
         responses=response
@@ -90,14 +84,11 @@ async def coefs(callback_query: CallbackQuery, state: FSMContext):
     data, user_lang = await parse_cq(callback_query)
 
     response = await controller.handle_coefs(
-        callback_query.from_user.id,
-        callback_query.from_user.username,
-        callback_query.message.text,
+        callback_query,
         user_lang,
         data,
         state
     )
-
     await template_callback(
         callback_query, state, inline,
         responses=response
@@ -109,18 +100,53 @@ async def select_date(callback_query: CallbackQuery, state: FSMContext):
     data, user_lang = await parse_cq(callback_query)
 
     response = await controller.handle_date(
-        callback_query.from_user.id,
-        callback_query.from_user.username,
-        callback_query.message.text,
+        callback_query,
         user_lang,
         data,
         state
     )
-
     await template_callback(
         callback_query, state, inline,
         responses=response
     )
+
+#----------------------------------------#----------------------------------------
+# Обрабатывает нажатие на кнопку установки диапазона дат
+#----------------------------------------#----------------------------------------
+@router.callback_query(
+    F.data.startswith(('select_diapason',
+                       'change_month_',
+                       'select_day_',
+                       'date_confirm'))
+)
+async def multi_handler(callback_query: CallbackQuery, state: FSMContext):
+    data, user_lang = await parse_cq(callback_query)
+
+    response = await controller.handle_date(
+        callback_query,
+        user_lang,
+        data,
+        state
+    )
+    await template_callback(
+        callback_query, state, inline,
+        responses=response
+    )
+
+@router.callback_query(F.data.startswith('task_save'))
+async def select_date(callback_query: CallbackQuery, state: FSMContext):
+    data, user_lang = await parse_cq(callback_query)
+
+    response = await controller.create_tasks_from_range(
+        callback_query,
+        user_lang,
+        data,
+        state
+    )
+    # await template_callback(
+    #     callback_query, state, inline,
+    #     responses=response
+    # )
 
 
 

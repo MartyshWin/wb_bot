@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import Integer, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
-from base import Base
+from .base import Base
 
 
 class Bot(Base):

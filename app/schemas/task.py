@@ -2,6 +2,9 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+from app.schemas.base_schema import BaseSchema
+
+
 # Схема для создания задачи
 class TaskCreate(BaseModel):
     user_id: int
@@ -24,11 +27,11 @@ class TaskUpdate(BaseModel):
     coef_modified: Optional[int] = None
 
 # Схема для возвращения задачи
-class TaskRead(BaseModel):
+class TaskRead(BaseSchema):
     id: int
     user_id: int
     warehouse_id: Optional[int] = None
-    box_type_id: int
+    box_type_id: int | list[int]
     coefficient: int
     state: str
     alarm: Optional[int] = None
