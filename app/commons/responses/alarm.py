@@ -71,12 +71,12 @@ class TaskAlarmResponse(BaseHandlerExtensions):
             offset: int = 0 * self.limit_whs_per_page
 
             # ── 2. получение данных ─────────────────────────────
-            warehouses_page = await self.task_service.get_unique_warehouses_at_user(user_id, self.limit_whs_per_page, offset)
+            task_list_with_names = await self.task_service.get_user_uniq_task_alarm(user_id, self.limit_whs_per_page, offset)
 
             # ── 3. Ответ пользователю  ─────────────────────────────
             return self.format_response(
                 text=self.lang['text_toggle_notifications'],
-                keyboard=self.inline.create_alarm_list(warehouses_page)
+                keyboard=self.inline.create_alarm_list(task_list_with_names)
             )
         except Exception as e:
             # Логирование для отладки

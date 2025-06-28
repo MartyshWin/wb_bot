@@ -1,8 +1,10 @@
 from datetime import datetime, UTC
 from typing import Literal, Optional, Any, Union
 from pydantic import BaseModel, Field, conint
+from sqlalchemy import Sequence
 
 from app.enums.general import TaskMode
+from app.schemas.mixins.pagination import PaginationMixin
 from app.schemas.task import TaskRead
 from app.schemas.warehouse import WarehouseRead
 
@@ -31,36 +33,15 @@ class ResponseError(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="ISO 8601 время (UTC)")
     trace_id: Optional[str] = Field(default=None, examples=["f5c1b1e0-4be1-48c7-b8f4-c5cdd7abc123"], description="Корреляционный ID для логов/трейсинга")
 
-class ResponseWarehouses(BaseModel):
+class ResponseWarehouses(PaginationMixin):
     warehouses: Union[list[dict[str, int | str]], list[WarehouseRead]]
     mode: Optional[str] = None
-    offset: int = Field(..., ge=0, description="Сколько записей пропустить от начала")
-    limit: int = Field(..., gt=0, description="Размер страницы")
-    total: int = Field(..., ge=0, description="Сколько всего складов")
     task_list: Optional[list[dict[str, int | bool]]] = None
 
-    @property
-    def page_index(self) -> int:  # 0-based
-        return self.offset // self.limit
 
-    @property
-    def total_pages(self) -> int:  # 1-based
-        return (self.total + self.limit - 1) // self.limit
-
-class ResponseTasks(BaseModel):
+class ResponseTasks(PaginationMixin):
     tasks: list[TaskRead]
-
-    offset: int = Field(..., ge=0, description="Сколько записей пропустить от начала")
-    limit: int = Field(..., gt=0, description="Размер страницы")
-    total: int = Field(..., ge=0, description="Сколько всего задач")
-
-    @property
-    def page_index(self) -> int:  # 0-based
-        return self.offset // self.limit
-
-    @property
-    def total_pages(self) -> int:  # 1-based
-        return (self.total + self.limit - 1) // self.limit
+    warehouses_names_list: Optional[list[dict[str, str | int]]] = None
 
 class ResponseBoxTypes(BaseModel):
     selected: list[str] = Field(default_factory=list, description="Уже отмеченные типы")

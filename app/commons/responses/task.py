@@ -32,7 +32,8 @@ class TaskResponse(BaseHandlerExtensions):
             'coefs': None,
             'period_start': None,
             'period_end': None,
-            'mode': ''
+            'mode': '',
+            'existing_tasks_ids': []
         }
 
         self.BULLET_HUBS = "\n\t 📍"  # единый разделитель для складов
@@ -518,8 +519,14 @@ class TaskResponse(BaseHandlerExtensions):
                 )
             )
 
-            # ── 6.4. Обновление словаря
-            setup_task = self._merge_setup_task(setup_task, selected_list=filtered)
+            # ── 6.4. Получаем уже выбранные склады
+            response_tasks = await self.task_service.get_user_uniq_task_warehouse_ids(
+                user_id
+            )
+            existing_whs_ids = [task.warehouse_id for task in response_tasks.tasks if task.warehouse_id is not None]
+
+            # ── 6.5. Обновление словаря
+            setup_task = self._merge_setup_task(setup_task, selected_list=filtered, existing_tasks_ids=existing_whs_ids)
             await state.update_data(setup_task=setup_task)
             logging.warning(setup_task)  # REMOVE
 
@@ -529,7 +536,8 @@ class TaskResponse(BaseHandlerExtensions):
                 keyboard=self.inline.create_warehouse_list(
                     warehouses_page,
                     setup_task['list'],
-                    setup_task['selected_list']
+                    setup_task['selected_list'],
+                    setup_task['existing_tasks_ids']
                 )
             )
         except Exception as e:

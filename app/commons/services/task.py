@@ -8,6 +8,7 @@ from typing import Any, Coroutine, Sequence, Union, Literal, Optional
 
 # Импортируем родительский класс, расширяя его
 from .extensions import BaseHandlerExtensions
+from ..utils.dump import DebugTools
 
 # Импортируем enums модели и константы
 from ...enums.constants import BOX_TYPE_MAP
@@ -52,59 +53,58 @@ class TaskService(BaseHandlerExtensions):
         return [ref[w_id] for w_id in selected_ids if w_id in ref]
 
     @staticmethod
+    @BaseHandlerExtensions.with_session_and_error_handling
     async def handle_create_task(
             user_id: int,
             page: int = None,
-            lang_dict: dict[str, dict[str, str]] | None = None
+            lang_dict: dict[str, dict[str, str]] | None = None,
+            session=None
     ) -> dict:
-        try:
-            offset = page * 10 if page else 0
-            # self.page_size
-            # self.box_types
+        offset = page * 10 if page else 0
+        # self.page_size
+        # self.box_types
 
-            # list_tasks = self.get_tasks_max_coef(user_id, box_types, {'limit': limit, 'offset': offset})
-            # if list_tasks['text']:
-            #     text = self.lang_dict['existing_tasks_warning'].format(list_tasks=list_tasks['text'])
-            #     return {**self.format_response(text, 'tasks_update_all'), "total": list_tasks['total']}
+        # list_tasks = self.get_tasks_max_coef(user_id, box_types, {'limit': limit, 'offset': offset})
+        # if list_tasks['text']:
+        #     text = self.lang_dict['existing_tasks_warning'].format(list_tasks=list_tasks['text'])
+        #     return {**self.format_response(text, 'tasks_update_all'), "total": list_tasks['total']}
 
-            # return self.format_response(self.lang_dict['existing_tasks_warning'], 'tasks_append')
-            return {'text': 'success'}
-        except Exception as e:
-            # Логирование для отладки
-            logging.error(f"Error in handle_create_task: {e}", exc_info=True)
-            return {'error': 'error occurred'}
+        # return self.format_response(self.lang_dict['existing_tasks_warning'], 'tasks_append')
+        return {'text': 'success'}
 
     @staticmethod
+    @BaseHandlerExtensions.with_session_and_error_handling
     async def get_warehouses_page(
             limit: int = 30,
             offset: int = 0,
             mode: str = None,
+            session=None
     ) -> ResponseWarehouses | ResponseError:
-        try:
-            async with db_helper.session_getter() as session:
-                rows = await hubs.get_all_warehouses(session, offset, limit)
-                # total_pages = -(-await hubs.count_warehouses(session) // limit)
-                total_whs = await hubs.count_warehouses(session)
-                warehouses = [{"id": w.warehouse_id, "name": w.warehouse_name} for w in rows]
+        rows = await hubs.get_all_warehouses(session, offset, limit)
+        total_whs = await hubs.count_warehouses(session)
 
-                return ResponseWarehouses(warehouses=warehouses, mode=mode, offset=offset, limit=limit, total=total_whs)
-            # return ResponseError(message="Ошибка при подключении к базе данных", code="DATABASE_ERROR")
-        except Exception as e:
-            # Логирование для отладки
-            logging.error(f"Error in handle_create_task: {e}", exc_info=True)
-            return ResponseError(message="Произошла ошибка в функции handle_create_task", code="INTERNAL_ERROR", errors=[str(e)])
+        warehouses = [{"id": w.warehouse_id, "name": w.warehouse_name} for w in rows]
+
+        return ResponseWarehouses(
+            warehouses=warehouses,
+            mode=mode,
+            offset=offset,
+            limit=limit,
+            total=total_whs
+        )
 
     @staticmethod
-    async def get_unique_warehouses_at_user(
+    # async def get_unique_warehouses_at_user(
+    async def get_user_uniq_task_alarm(
             user_id: int,
-            limit: int,
-            offset: int = 0,
+            limit: Optional[int] = None,
+            offset: Optional[int] = 0,
     ) -> ResponseWarehouses | ResponseError:
         try:
             async with db_helper.session_getter() as session:
                 wid_at_user: list[dict[str, int | bool]] = await slots.get_warehouses_with_alarm(session, user_id)
                 warehouse_ids = [w["id"] for w in wid_at_user]
-                total_whs = await slots.count_unique_warehouses(session, user_id)
+                total_whs = await slots.count_uniq_tasks_by_whs(session, user_id)
                 warehouses = await hubs.get_warehouses_name_map(session, warehouse_ids)
 
                 return ResponseWarehouses(warehouses=warehouses, offset=offset, limit=limit, total=total_whs, task_list=wid_at_user)
@@ -114,6 +114,43 @@ class TaskService(BaseHandlerExtensions):
             logging.error(f"Error in handle_create_task: {e}", exc_info=True)
             return ResponseError(message="Произошла ошибка в функции handle_create_task", code="INTERNAL_ERROR",
                                  errors=[str(e)])
+
+    @staticmethod
+    @BaseHandlerExtensions.with_session_and_error_handling
+    async def get_user_uniq_task_alarm(
+            user_id: int,
+            limit: Optional[int] = None,
+            offset: Optional[int] = 0,
+            session=None
+    ) -> ResponseTasks | ResponseError:
+        # ── 1. Получаем все уникальные задачи пользователя (по складам)
+        uniq_task: Sequence[TaskRead] = await slots.get_tasks_unique_by_warehouse(session, user_id)
+
+        # ── 1.1. Вытягиваем id складов и статус уведомлений в uniq_task_alarm;
+        uniq_task_alarm = [{"id": task.warehouse_id, "alarm": task.alarm} for task in uniq_task if task.warehouse_id is not None]
+
+        # ── 2. Получаем количество уникальных задач
+        total = await slots.count_uniq_tasks_by_whs(session, user_id)
+
+        # ── 3. Образуем список складов (whs_list) и получаем их имена (whs_names)
+        whs_list = [w["id"] for w in uniq_task_alarm]
+        whs_names = await hubs.get_warehouses_name_map(session, whs_list)
+
+        # ── 4. Передаем в модель ResponseTasks
+        return ResponseTasks(tasks=list(uniq_task), offset=offset, limit=limit, total=total,
+                                  warehouses_names_list=whs_names)
+
+        # DebugTools.pretty_dump(uniq_task, style="rich", title="📦 Product Dump")
+        # DebugTools.pretty_dump(uniq_task_alarm, style="rich", title="📦 Product Dump")
+
+    @staticmethod
+    @BaseHandlerExtensions.with_session_and_error_handling
+    async def get_user_uniq_task_warehouse_ids(
+            user_id: int,
+            session=None
+    ) -> ResponseTasks | ResponseError:
+        warehouses_ids = await slots.get_tasks_unique_by_warehouse(session, user_id)
+        return ResponseTasks(tasks=list(warehouses_ids), offset=0, limit=1, total=0)
 
     @staticmethod
     async def create_bulk_tasks(
@@ -155,7 +192,7 @@ class TaskService(BaseHandlerExtensions):
                     TaskRead.model_validate(task)
                     for task in tasks
                 ]
-                total_whs_in_tasks = await slots.count_unique_warehouses(session, user_id)
+                total_whs_in_tasks = await slots.count_uniq_tasks_by_whs(session, user_id)
 
                 return ResponseTasks(tasks=tasks_serialized, offset=offset, limit=limit, total=total_whs_in_tasks)
             # return ResponseError(message="Ошибка при подключении к базе данных", code="DATABASE_ERROR")

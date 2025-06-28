@@ -13,7 +13,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.enums.constants import COEF_TITLES
 from app.enums.general import BoxType
-from app.schemas.general import ResponseWarehouses, ResponseBoxTypes, ResponseCoefs
+from app.schemas.general import ResponseWarehouses, ResponseBoxTypes, ResponseCoefs, ResponseTasks
 
 
 # Кнопки должны получать язык приложения, чтобы соответствовать выбранному пользователем
@@ -25,7 +25,7 @@ class InlineKeyboardHandler:
             [{"text": "🗂 Мой список задач", "callback_data": "my_tasks"}],
             [{"text": "⚙️ Настройка уведомлений", "callback_data": "alarm_setting"}],
             [{"text": "💎 Подписка", "callback_data": "choose_tariff"}],
-            [{"text": "ℹ️ Инструкция", "callback_data": "select_diapason"}],
+            [{"text": "ℹ️ Инструкция", "callback_data": "rules"}],
         ])
 
         self.task_mode_keyboard: InlineKeyboardMarkup = self.build_inline_keyboard([
@@ -373,6 +373,7 @@ class InlineKeyboardHandler:
             page_data: ResponseWarehouses,
             selected_warehouses: list[int],
             selected_list: list[int],
+            existing_whs_ids: list[int]
     ) -> InlineKeyboardMarkup:
         # --- данные из модели: Парсинг Pydantic модели --------------------------
         warehouses = page_data.warehouses
@@ -385,8 +386,15 @@ class InlineKeyboardHandler:
         for warehouse in warehouses:
             wid = warehouse["id"]
             name = warehouse["name"]
-            label = f"🟢 {name}" if wid in (*selected_warehouses, *selected_list) else name
-            pairs.append((str(label), f"{url}_id{wid}"))
+
+            if wid in existing_whs_ids:
+                label = f"🔔 {name}"
+                cb_data = f"ignore_wh_{wid}"
+            else:
+                label = f"🟢 {name}" if wid in (*selected_warehouses, *selected_list) else name
+                cb_data = f"{url}_id{wid}"
+
+            pairs.append((label, cb_data))
 
         # --- «хвост» (пагинация, подтверждение, назад) ---------------------------
         tail_rows: list[list[tuple[str, str]]] = []
@@ -514,13 +522,13 @@ class InlineKeyboardHandler:
 
     def create_alarm_list(
             self,
-            page_data: ResponseWarehouses,
+            page_data: ResponseTasks,
     ) -> InlineKeyboardMarkup:
         # --- данные из модели: Парсинг Pydantic модели --------------------------
-        warehouses = page_data.warehouses
+        warehouses = page_data.warehouses_names_list
         page: int = page_data.page_index
         total_pages = page_data.total_pages
-        alarm_status: dict[int, bool] = {item['id']: item['alarm'] for item in page_data.task_list}
+        alarm_status: dict[int, int] = {item.warehouse_id: item.alarm for item in page_data.tasks}
 
         # --- основная сетка кнопок (по 2 в ряд) -------------------------------------
         pairs: list[tuple[str, str]] = []

@@ -7,7 +7,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import Task
-from app.schemas.task import TaskCreate, TaskUpdate
+from app.schemas.task import TaskCreate, TaskUpdate, TaskRead
+
 
 # ---------------------------------------------------------------------------
 # GET
@@ -113,6 +114,66 @@ async def get_unique_warehouses(session: AsyncSession, user_id: int) -> list[int
     rows = await session.execute(stmt)
     return [row[0] for row in rows.fetchall()]
 
+# ── Экспериментальные функции  ───────────────────────────────────────────
+async def get_tasks_unique_by_warehouse(session: AsyncSession, user_id: int) -> Sequence[TaskRead]:
+    """
+    Возвращает по одной задаче на каждый уникальный warehouse_id у заданного пользователя.
+    """
+    subq = (
+        select(
+            Task.id,
+            func.row_number().over(
+                partition_by=Task.warehouse_id,
+                order_by=Task.coefficient.desc()  # или другой критерий выбора «лучшей» записи
+            ).label("rn")
+        )
+        .where(Task.user_id == user_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(Task)
+        .join(subq, Task.id == subq.c.id)
+        .where(subq.c.rn == 1)
+    )
+
+    result = await session.scalars(stmt)
+    tasks: Sequence[Task] = result.all() # Объявляем ORM модель объекта Task
+    return [TaskRead.model_validate(task) for task in tasks] # Превращаем из ORM в TaskRead
+
+
+async def get_tasks_unique_by_warehouse_and_box_type(
+    session: AsyncSession,
+    user_id: int
+) -> Sequence[TaskRead]:
+    """
+    Возвращает по одной задаче на каждую уникальную пару (warehouse_id, box_type_id)
+    у заданного пользователя, с наибольшим коэффициентом.
+    """
+    subq = (
+        select(
+            Task.id,
+            func.row_number().over(
+                partition_by=(Task.warehouse_id, Task.box_type_id),
+                order_by=Task.coefficient.desc()
+            ).label("rn")
+        )
+        .where(Task.user_id == user_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(Task)
+        .join(subq, Task.id == subq.c.id)
+        .where(subq.c.rn == 1)
+    )
+
+    result = await session.scalars(stmt)
+    tasks: Sequence[Task] = result.all() # Объявляем ORM модель объекта Task
+    return [TaskRead.model_validate(task) for task in tasks] # Превращаем из ORM в TaskRead
+# ────────────────────────────────────────────────────────────────────────────
+
+
 async def get_warehouses_with_alarm(session: AsyncSession, user_id: int) -> list[dict[str, int | bool]]:
     """
     Возвращает список складов пользователя с их флагом alarm.
@@ -126,7 +187,7 @@ async def get_warehouses_with_alarm(session: AsyncSession, user_id: int) -> list
     rows = await session.execute(stmt)
     return [{"id": wid, "alarm": alarm} for wid, alarm in rows.fetchall()]
 
-async def count_unique_warehouses(session: AsyncSession, user_id: int) -> int:
+async def count_uniq_tasks_by_whs(session: AsyncSession, user_id: int) -> int:
     """Количество уникальных складов у пользователя."""
     stmt = select(func.count(distinct(Task.warehouse_id))).where(Task.user_id == user_id)
     result = await session.execute(stmt)

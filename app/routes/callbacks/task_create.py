@@ -143,10 +143,10 @@ async def select_date(callback_query: CallbackQuery, state: FSMContext):
         data,
         state
     )
-    # await template_callback(
-    #     callback_query, state, inline,
-    #     responses=response
-    # )
+    await template_callback(
+        callback_query, state, inline,
+        responses=response
+    )
 
 
 

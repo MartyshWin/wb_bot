@@ -34,7 +34,7 @@ class TaskRead(BaseSchema):
     box_type_id: int | list[int]
     coefficient: int
     state: str
-    alarm: Optional[int] = None
+    alarm: Optional[int] = None #makeit Literal[0,1]
     date: Optional[datetime] = None
     coef_modified: Optional[int] = None
     created_at: datetime
