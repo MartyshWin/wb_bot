@@ -56,11 +56,10 @@ async def template_callback(
             await cq.answer(first.popup_text, show_alert=first.popup_alert)
         # -----------------------------
 
-        if first.text != '':
-            if first.type_edit == "keyboard":  # только поменять КБ
-                await cq.message.edit_reply_markup(reply_markup=kb)
-            else:  # полное редактирование
-                await cq.message.edit_text(first.text, reply_markup=kb)
+        if first.type_edit == "keyboard":  # только поменять КБ
+            await cq.message.edit_reply_markup(reply_markup=kb)
+        else:  # полное редактирование
+            await cq.message.edit_text(first.text, reply_markup=kb)
 
         # ── 4. остальные ответы → новые сообщения -----------------------------
         for resp in resp_list[1:]:
@@ -74,11 +73,10 @@ async def template_callback(
 
             # если нужно редактировать КБ предыдущего сообщения,
             # а не создавать новое – проверяем type_edit
-            if first.text != '':
-                if resp.type_edit == "keyboard":
-                    await cq.message.edit_reply_markup(reply_markup=kb)
-                else:
-                    await cq.message.answer(resp.text, reply_markup=kb)
+            if resp.type_edit == "keyboard":
+                await cq.message.edit_reply_markup(reply_markup=kb)
+            else:
+                await cq.message.answer(resp.text, reply_markup=kb)
     except Exception as e:
         logging.error(f"template_callback error: {e}", exc_info=True)
 
