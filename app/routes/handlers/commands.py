@@ -12,7 +12,7 @@ inline = InlineKeyboardHandler()
 
 #----------------------------------------#----------------------------------------
 @router.message(Command('start'))
-async def start_command_handler(message: Message, command: CommandObject) -> None | dict:
+async def start_command_handler(message: Message, command: CommandObject): #  -> None | dict - убрал, нет вызова return, который что-то бы возвращал
     """
     Обработка команды /start с параметром и без.
 

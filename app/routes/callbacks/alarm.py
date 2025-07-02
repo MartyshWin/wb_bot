@@ -16,7 +16,7 @@ controller = TaskAlarmResponse(inline_handler=inline)
 # Обработчик кнопки "Настройка уведомлений".
 #----------------------------------------#----------------------------------------
 @router.callback_query(F.data.startswith('alarm_setting'))
-async def alarm_setting(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
+async def alarm_setting(callback_query: CallbackQuery, state: FSMContext):
     data, user_lang = await parse_cq(callback_query)
     response = await controller.setup_notifications(callback_query, user_lang, data)
 

@@ -3,6 +3,7 @@ import os
 import logging
 from aiogram.client.default import DefaultBotProperties
 from aiogram import Bot, Dispatcher
+from aiorun import run  # Импортируем aiorun
 
 from app.commons.utils.custom_logger import setup_logger
 from app.middlewares.logging import LoggingMiddleware
@@ -17,7 +18,7 @@ async def main() -> None:
     """
     try:
         # Будет еще писаться информация о боте, имя, url, описание
-        logging.info("Программа работает.")
+        logging.info("🟢 Программа работает.")
 
         # Инициализация бота и диспетчера
         bot = Bot(
@@ -35,22 +36,20 @@ async def main() -> None:
             main_router_callbacks
         )
         # Запуск бота
-        logging.info("Запуск long polling...")
+        await asyncio.sleep(0.7)
+        logging.info("🔄 Запуск long polling...")
         await dp.start_polling(bot)
-        await asyncio.sleep(1)
     except Exception as e:
-        logging.error(f"Ошибка в главной функции: {e}", exc_info=True)
-    finally:
-        logging.info("Закрытие ресурсов...")
+        logging.error(f"📛 Ошибка в главной функции: {e}", exc_info=True)
 
 
 if __name__ == "__main__":
     try:
         setup_logger(settings.logging.level)
-        logger = logging.getLogger(__name__)
+        # logger = logging.getLogger(__name__)
+        logging.info("🚀 Запуск бота через aiorun...")
 
-        logging.info("Запуск программы...")
-        asyncio.run(main())
+        run(main())
     except KeyboardInterrupt:
         logging.warning("Программа была остановлена вручную.")
     except Exception as e:

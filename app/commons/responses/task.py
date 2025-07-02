@@ -8,8 +8,10 @@ from typing import AnyStr, Any, Optional, Sequence, Union
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
+from app.commons.responses.edit import TaskEditResponse
 from app.commons.responses.extensions import BaseHandlerExtensions, T
 from app.commons.services.task import TaskService
+from app.commons.services.validators import date_validators
 from app.commons.utils.language_loader import load_language
 from app.enums.constants import BOX_TITLES, COEF_TITLES, PERIOD_MAP, BOX_TITLES_RU
 from app.enums.general import TaskMode, BoxType
@@ -17,6 +19,7 @@ from app.keyboards.inline.general import InlineKeyboardHandler
 from app.routes.states.task_states import TaskStates
 from app.schemas.general import ResponseModel, ResponseBoxTypes, ResponseCoefs
 from app.schemas.task import TaskRead
+from app.schemas.typed_dict import LangType
 
 
 class TaskResponse(BaseHandlerExtensions):
@@ -24,200 +27,11 @@ class TaskResponse(BaseHandlerExtensions):
         super().__init__()
         self.task_service = TaskService()
         self.inline = inline_handler
-        self.task_state_template: dict[str, Any] = {
-            'current_page': 0,
-            'list': [],
-            'selected_list': [],
-            'box_type': [],
-            'coefs': None,
-            'period_start': None,
-            'period_end': None,
-            'mode': '',
-            'existing_tasks_ids': []
-        }
-
-        self.BULLET_HUBS = "\n\t 📍"  # единый разделитель для складов
-        self.BULLET_BOXES = "\n\t ▫️"  # единый разделитель для типов упаковок
-
-
-    # ───────────────────────────── helpers ──────────────────────────────────────
-    # Подумать стоит ли переносить эти хэлперы в отдельный модуль
-    @staticmethod
-    def _parse_raw(raw: str | int) -> tuple[int, Optional[int], bool, bool]:
-        """raw → (page, warehouse_id | None, is_id, is_confirm)"""
-        if isinstance(raw, str):
-            if raw.startswith("id"):
-                return 0, int(raw[2:]), True, False
-            if raw.startswith("confirm"):
-                return 0, None, False, True
-            return int(raw), None, False, False
-        return int(raw), None, False, False
-
-    @staticmethod
-    def _merge_setup_task(old: dict, **patch) -> dict:
-        """Иммутабельное обновление setup_task"""
-        return {**old, **patch}
-
-    @staticmethod
-    def toggle_selection(
-            container: Union[list[T], dict[T, Any]],
-            key: T | None,
-            *,
-            single: bool = False,  # single=True → режим «один выбранный» (FLEX)
-            value: Any = None,  # payload для словаря при первом добавлении
-    ) -> Union[list[T], dict[T, Any]]:
-        """
-        Универсальный «переключатель» выбора.
-
-        • container – либо список ID / Enum-ов      (list[T])
-                      либо словарь {ID|Enum: any}   (dict[T, Any])
-        • key       – элемент, по которому кликнули (int, Enum …)
-                      None → контейнер остаётся без изменений
-        • single    – True  → после добавления остаётся только key
-                      False → мультивыбор
-        • value     – чем заполнять dict при добавлении (по умолчанию None)
-
-        Возвращается НОВЫЙ объект (исходный не мутируется).
-        """
-
-        if key is None:  # клик был «мимо» – ничего не меняем
-            return container.copy() if isinstance(container, list) else container.copy()
-
-        # ─────────────── работа со СПИСКОМ ─────────────────────────────
-        if isinstance(container, list):
-            if key in container:  # снять выбор
-                return [x for x in container if x != key]
-
-            # добавить
-            return [key] if single else container + [key]
-
-        # ─────────────── работа со СЛОВАРЁМ ────────────────────────────
-        new_dict: dict[T, Any] = container.copy()
-
-        if key in new_dict:  # снять выбор
-            new_dict.pop(key)
-        else:  # добавить
-            if single:
-                new_dict = {key: value}  # оставить только key
-            else:
-                new_dict[key] = value
-
-        return new_dict
-
-    async def format_tasks_list(
-            self,
-            tasks: list[TaskRead],
-            box_titles: BOX_TITLES_RU,
-    ) -> dict[str, object]:
-        """
-        Формирует текстовый список задач по складам с агрегацией параметров:
-        группировка по складу, коэффициенту, объединение типов коробок и периода дат.
-
-        :param tasks: Список задач модели TaskRead
-        :return: Словарь с текстом и количеством складов
-        """
-        split_line = "----------------------"
-        today = datetime.now().date()
-        result: list[str] = []
-
-        # ── группировка задач ─────────────────────────────────────────────
-        grouped = defaultdict(lambda: defaultdict(set))
-        for task in tasks:
-            grouped[task.warehouse_id][task.coefficient].add((task.box_type_id, task.date))
-
-        wh_ids = list(grouped.keys())
-        whs_by_ids = await self.task_service.get_whs_by_ids(wh_ids)
-        wh_names = {wh.warehouse_id: wh.warehouse_name for wh in whs_by_ids.warehouses}
-
-        for wh_id, coef_groups in grouped.items():
-            name = wh_names.get(wh_id, f"Неизвестный склад (ID: {wh_id})")
-
-            for coefficient, box_and_dates in coef_groups.items():
-                box_types = sorted({box_titles.get(box, "Неизвестный тип") for box, _ in box_and_dates})
-                dates = sorted({date for _, date in box_and_dates})
-
-                if not dates:
-                    continue
-
-                date_from = dates[0].date() if isinstance(dates[0], datetime) else dates[0]
-                date_to = dates[-1].date() if isinstance(dates[-1], datetime) else dates[-1]
-                is_active = "🟢 АКТИВНО" if date_from <= today <= date_to else "🔴 НЕАКТИВНО"
-
-                result.append(
-                    f"🚛 СКЛАД: {name}\n"
-                    f"🛠 СТАТУС: {is_active}\n"
-                    f"📦 УПАКОВКА: {', '.join(box_types)}\n"
-                    f"⚖️ КОЭФФИЦИЕНТ: до х{coefficient}\n"
-                    f"📅 ПЕРИОД ПОИСКА СЛОТОВ: с <u>{date_from}</u> по <u>{date_to}</u>"
-                )
-
-        return {
-            "text": f"\n{split_line}\n".join(result),
-            "total": len(wh_ids)
-        }
-
-    def toggle_id(self, items: list[int], wid: Optional[int], mode: TaskMode) -> list[int]:
-        """
-        «Переключает» склад *wid* в списке *items*, используя общий toggle_selection.
-
-        • wid is None       → список не меняется
-        • wid уже в items   → удаляем его
-        • wid нет в items   → добавляем
-        • mode == FLEX      → после добавления остаётся только wid (одиночный выбор)
-
-        Возвращается **новый** список id.
-        """
-        # if wid is None:  # клик не по складу
-        #     return items.copy()
-        #
-        # return self.toggle_selection(
-        #     container=items,
-        #     key=wid,
-        #     single=(mode is TaskMode.FLEX),
-        # )
-        single = mode is TaskMode.FLEX
-        return self.toggle_selection(items, wid, single=single)
-
-    def build_selection_pieces(self, state: dict[str, Any]) -> dict[str, str]:
-        """
-        Возвращает **словарь** готовых фрагментов текста.
-        Ключи добавляются только если данные действительно есть.
-
-        keys:
-            warehouses  – «📍 Алматы …»
-            boxes       – «▫️ Короба …»
-            coef        – «Бесплатно» / «До xN»
-        """
-        pieces: dict[str, str] = {'warehouses': '', 'boxes': '', 'coef': ''}
-
-        # ── 1. склады ───────────────────────────────────────────────────────
-        warehouses: list[dict[str, str | int]] = state.get("selected_list") or []
-        if warehouses:
-            pieces["warehouses"] = self.BULLET_HUBS.join(
-                f"<i>{wh['name']}</i>" for wh in warehouses
-            )
-
-        # ── 2. типы коробок ────────────────────────────────────────────────
-        box_codes: list = state.get("box_type") or []
-        if box_codes:
-            pieces["boxes"] = self.BULLET_BOXES.join(
-                f"<i>{BOX_TITLES[code]}</i>" for code in box_codes
-            )
-
-        # ── 3. коэффициент ─────────────────────────────────────────────────
-        raw_coef = state.get("coefs")
-        if str(raw_coef).isdigit():
-            coef = int(raw_coef)
-            pieces["coef"] = (
-                "Бесплатно" if coef == 0 else f"До <b>x{coef}</b>"
-            )
-
-        return pieces
 
     async def commit_hubs_selection(
             self,
             state_data: dict,
-            lang: dict[str, dict[str, str]],
+            lang: LangType,
     ) -> ResponseModel:
         box_types: list = state_data.get('box_type')
         parts = self.build_selection_pieces(state_data)
@@ -234,7 +48,7 @@ class TaskResponse(BaseHandlerExtensions):
     async def commit_box_selection(
             self,
             state_data: dict,
-            lang: dict[str, dict[str, str]],
+            lang: LangType,
     ) -> ResponseModel:
         coef: Optional[int] = state_data.get('coefs', None)
         parts = self.build_selection_pieces(state_data)
@@ -254,7 +68,7 @@ class TaskResponse(BaseHandlerExtensions):
     async def commit_coefs_selection(
             self,
             state_data: dict,
-            lang: dict[str, dict[str, str]],
+            lang: LangType,
     ) -> ResponseModel:
         parts = self.build_selection_pieces(state_data)
 
@@ -270,7 +84,7 @@ class TaskResponse(BaseHandlerExtensions):
     async def commit_date_selection(
             self,
             state_data: dict,
-            lang: dict[str, dict[str, str]],
+            lang: LangType,
     ) -> ResponseModel:
         # warehouses_list: list[dict[str, str | int]] = state_data.get('selected_list')
         # box_types: list = state_data.get('box_type')
@@ -294,96 +108,91 @@ class TaskResponse(BaseHandlerExtensions):
 
     async def commit_month_selection(
             self,
-            state_data: dict,
-            lang: dict[str, dict[str, str]],
             year: str | int,
-            month: str | int
+            month: str | int,
+            kb_url_list: Optional[dict] = None,
     ) -> ResponseModel:
-        parts = self.build_selection_pieces(state_data)
-        period_start = state_data.get('period_start') or None
-        period_end = state_data.get('period_end') or None
-
-        y, m, d = map(int, (year, month, datetime.now().day))  # str → int
-        today = date.today()
+        y, m, d = map(int, (year, month, 1))  # str → int
         check_date = self.validate_ymd(y, m, d)  # либо дата, либо исключение
-        print(check_date)
 
-        if check_date.year > today.year + 20:
-            return self.format_response(
-                text='',
-                popup_text="Невозможный формат даты",
-                popup_alert=True
-            )
+        # ── 1.1. Создаем словарь с безопасной распаковкой
+        calendar_kwargs = {
+            "year": check_date.year,
+            "month": check_date.month,
+            **(kb_url_list or {})  # добавит только если словарь есть
+        }
 
         return self.format_response(
             text='',
-            keyboard=self.inline.generate_calendar(
-                year=check_date.year,
-                month=check_date.month,
-            ),
+            keyboard=self.inline.generate_calendar(**calendar_kwargs),
             type_edit='keyboard'
         )
 
     async def commit_day_selection(
             self,
             state_data: dict,
-            lang: dict[str, dict[str, str]],
+            lang: LangType,
             state: FSMContext,
             year: str | int,
             month: str | int,
-            day: str | int
+            day: str | int,
+            kb_url_list: Optional[dict] = None,
+            task_key: str = "setup_task"
     ) -> ResponseModel:
+        # ── 1. извлечение и валидация данных
+        error: dict[str, str] = lang['error']['diapason']
+
         period_start = state_data.get('period_start') or None
         period_end = state_data.get('period_end') or None
 
         y, m, d = map(int, (year, month, day))  # str → int
-        today = date.today()
         check_date = self.validate_ymd(y, m, d)  # либо дата, либо исключение
-        readable_date = check_date.strftime("%Y-%m-%d")
+        readable_date = check_date.isoformat()
 
-        if check_date < today or check_date.year > today.year + 20:
-            return self.format_response(
-                text='',
-                popup_text="Выбранная дата не может быть в прошлом или невозможный формат даты",
-                popup_alert=True
-            )
+        # ── 1.1. Создаем словарь с безопасной распаковкой
+        calendar_kwargs = {
+            "year": check_date.year,
+            "month": check_date.month,
+            "highlight_day": check_date.day,
+            **(kb_url_list or {})  # добавит только если словарь есть
+        }
 
-        if period_start and period_end:
-            return self.format_response(text='', popup_alert=True,
-                popup_text="Вы уже выбрали дату, нажмите 'Назад ↩️', чтоб ее сбросить"
-            )
+        ok, error_text = date_validators.validate_diapason(check_date, period_start, period_end, error)
+        # ── 1.2. вызов alert
+        if not ok:
+            return self.format_alert(popup_text=error_text, popup_alert=True)
 
+        # ── 2. если выбрана конечная дата
         if period_start:
-            data = self._merge_setup_task(state_data,
-                period_end=readable_date
-            )
-            await state.update_data(setup_task=data)
+            data = self._merge_setup_task(state_data, period_end=readable_date)
+            await state.update_data(**{task_key: data})
 
+            # calendar_kwargs = {
+            #     "year": check_date.year,
+            #     "month": check_date.month,
+            #     "highlight_day": check_date.day,
+            #     "confirm": True,
+            #     **(kb_url_list or {})  # добавит только если словарь есть
+            # } #REMOVE
+
+            calendar_kwargs['confirm'] = True
             return self.format_response(
                 text=lang['diapason_confirm'].format(
                     start_date=period_start,
                     select_date=readable_date
                 ),
-                keyboard=self.inline.generate_calendar(
-                    year=check_date.year,
-                    month=check_date.month,
-                    highlight_day=check_date.day,
-                    confirm=True
-                )
+                keyboard=self.inline.generate_calendar(**calendar_kwargs)
             )
 
-        data = self._merge_setup_task(state_data,
-            period_start=readable_date,
-        )
-        await state.update_data(setup_task=data)
+        # ── 2.1. если выбрана начальная дата
+        data = self._merge_setup_task(state_data, period_start=readable_date)
+        await state.update_data(**{task_key: data})
+        print(f'{data=}')
 
+        # ── 3. Ответ пользователю
         return self.format_response(
             text=lang['diapason_end'].format(date=readable_date),
-            keyboard=self.inline.generate_calendar(
-                year=check_date.year,
-                month=check_date.month,
-                highlight_day=check_date.day
-            )
+            keyboard=self.inline.generate_calendar(**calendar_kwargs)
         )
 
     # ───────────────────────────── handlers ──────────────────────────────────────
@@ -560,7 +369,6 @@ class TaskResponse(BaseHandlerExtensions):
             self.lang = load_language(code_lang)
 
             # ── 1. state (setup_task)  ────────────────────────────────────────────
-            # Создание машины состояний: FSMContext и базового словаря
             state_data = await state.get_data()
             setup_task: dict = state_data['setup_task'] # setup_task не может отсутствовать
             setup_task_bxts: list = setup_task.get('box_type', [])
@@ -623,7 +431,6 @@ class TaskResponse(BaseHandlerExtensions):
             self.lang = load_language(code_lang)
 
             # ── 1. state (setup_task)  ────────────────────────────────────────────
-            # Создание машины состояний: FSMContext и базового словаря
             state_data = await state.get_data()
             setup_task: dict = state_data['setup_task'] # setup_task не может отсутствовать
 
@@ -732,7 +539,7 @@ class TaskResponse(BaseHandlerExtensions):
                 )
             # ── 3.2 смена месяца в диапазоне  ──────────────────────────────
             elif process == "change" and type_act == "month":
-                return await self.commit_month_selection(setup_task, self.lang, sel_year, sel_month)
+                return await self.commit_month_selection(sel_year, sel_month)
             # ── 3.3 выбор дня в диапазоне дат ──────────────────────────────
             elif process == "select" and type_act == "day":
                 return await self.commit_day_selection(setup_task, self.lang, state, sel_year, sel_month, sel_day)
@@ -763,7 +570,9 @@ class TaskResponse(BaseHandlerExtensions):
             cq: CallbackQuery,
             code_lang: str,
             data: list[str],
-            state: FSMContext
+            state: FSMContext,
+            next_view: bool = True,
+            state_key: str = 'setup_task'
     ) -> ResponseModel | None:
         """
         Создаёт задачи на основе данных:
@@ -776,7 +585,7 @@ class TaskResponse(BaseHandlerExtensions):
         # ── 1. state (setup_task)  ────────────────────────────────────────────
         # Создание машины состояний: FSMContext и базового словаря
         state_data = await state.get_data()
-        setup_task: dict = state_data['setup_task']  # setup_task не может отсутствовать
+        setup_task: dict = state_data[state_key]  # setup_task не может отсутствовать
 
         # ── 2. извлечение и валидация данных ─────────────────────────────
         user_id: int = cq.from_user.id
@@ -808,7 +617,8 @@ class TaskResponse(BaseHandlerExtensions):
         # ── 5. генерация задач по комбинациям ────────────────────────────
         await self.task_service.create_bulk_tasks(user_id, warehouse_ids, box_types, max_coef, days_range)
         from app.routes.callbacks.task_view import my_tasks
-        await my_tasks(cq, state)
+        if next_view:
+            return await self.overview_task(cq, code_lang, data, state)
 
     # ───────────────────────────── task_view ──────────────────────────────────────
     async def overview_task(self,
@@ -827,7 +637,7 @@ class TaskResponse(BaseHandlerExtensions):
 
             # ── 2. Получение задач юзера ─────────────────────────────────
             all_tasks = await self.task_service.get_all_unique_tasks(user_id, self.limit_whs_for_view, offset)
-            response_text = await self.format_tasks_list(all_tasks.tasks, BOX_TITLES_RU)
+            response_text = await self.format_tasks_list(all_tasks.tasks, BOX_TITLES_RU, self.task_service)
 
             # ── 3. Ответ пользователю, если задач нет ─────────────────────────────────
             if not all_tasks.tasks and all_tasks.total == 0:
@@ -846,7 +656,7 @@ class TaskResponse(BaseHandlerExtensions):
             )
         except Exception as e:
             # Логирование для отладки
-            logging.error(f"Error in handle_box_type: {e}", exc_info=True)
+            logging.error(f"Error in overview_task: {e}", exc_info=True)
             return self.format_response(self.lang['error_occurred'], self.inline.my_tasks_empty)
 
     # ───────────────────────────── task_delete ──────────────────────────────────────
@@ -855,7 +665,7 @@ class TaskResponse(BaseHandlerExtensions):
             code_lang: str,
             data: list[str],
             state: FSMContext
-    ) -> ResponseModel | None:
+    ) -> Union[ResponseModel, list[ResponseModel]] | None:
         try:
             # ── 1. извлечение и валидация данных ─────────────────────────────
             user_id: int = cq.from_user.id
@@ -877,10 +687,20 @@ class TaskResponse(BaseHandlerExtensions):
                     keyboard=self.inline.tasks_delete_all,
                 )
             elif action.startswith("id"):
-                pass # Добавить удаление по ID
+                trash = await self.task_service.delete_single_tasks(user_id, action[2:])
+                popup_text = self.format_alert(
+                    popup_text=str(self.lang['single_task_deleted']),
+                    popup_alert=True
+                )
+                from app.commons.responses.edit import TaskEditResponse
+                edit_response = TaskEditResponse(inline_handler=self.inline)
+                return [
+                    popup_text,
+                    await edit_response.view_all_warehouses(cq, data, state, self.lang)
+                ]
 
 
         except Exception as e:
             # Логирование для отладки
-            logging.error(f"Error in handle_box_type: {e}", exc_info=True)
+            logging.error(f"Error in delete_task: {e}", exc_info=True)
             return self.format_response(self.lang['error_occurred'], self.inline.my_tasks_empty)

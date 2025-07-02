@@ -68,7 +68,7 @@ async def get_tasks_by_user_with_limit(
     wh_stmt = (
         select(distinct(Task.warehouse_id))
         .where(Task.user_id == user_id)
-        .order_by(Task.warehouse_id)
+        .order_by(Task.created_at)
     )
 
     if limit is not None:
@@ -115,19 +115,33 @@ async def get_unique_warehouses(session: AsyncSession, user_id: int) -> list[int
     return [row[0] for row in rows.fetchall()]
 
 # ── Экспериментальные функции  ───────────────────────────────────────────
-async def get_tasks_unique_by_warehouse(session: AsyncSession, user_id: int) -> Sequence[TaskRead]:
+async def get_tasks_unique_by_warehouse(
+        session: AsyncSession,
+        user_id: int,
+        warehouse_ids: list[int] | None = None
+) -> Sequence[TaskRead]:
     """
-    Возвращает по одной задаче на каждый уникальный warehouse_id у заданного пользователя.
+    Возвращает по одной задаче на каждый уникальный warehouse_id (или паре warehouse_id + user_id),
+    с максимальным коэффициентом. При наличии фильтра warehouse_ids — применяется он тоже.
+
+    :param session: Асинхронная сессия базы данных.
+    :param user_id: ID пользователя.
+    :param warehouse_ids: Список ID складов (опционально).
+    :return: Список TaskRead.
     """
+    filters = [Task.user_id == user_id]
+    if warehouse_ids:
+        filters.append(Task.warehouse_id.in_(warehouse_ids))
+
     subq = (
         select(
             Task.id,
             func.row_number().over(
                 partition_by=Task.warehouse_id,
-                order_by=Task.coefficient.desc()  # или другой критерий выбора «лучшей» записи
+                order_by=Task.coefficient.desc()
             ).label("rn")
         )
-        .where(Task.user_id == user_id)
+        .where(*filters)
         .subquery()
     )
 
@@ -144,12 +158,18 @@ async def get_tasks_unique_by_warehouse(session: AsyncSession, user_id: int) -> 
 
 async def get_tasks_unique_by_warehouse_and_box_type(
     session: AsyncSession,
-    user_id: int
+    user_id: int,
+    warehouse_ids: list[int] | None = None
 ) -> Sequence[TaskRead]:
     """
     Возвращает по одной задаче на каждую уникальную пару (warehouse_id, box_type_id)
     у заданного пользователя, с наибольшим коэффициентом.
+    При наличии фильтра warehouse_ids — выводятся задачи только для этого склада.
     """
+    filters = [Task.user_id == user_id]
+    if warehouse_ids:
+        filters.append(Task.warehouse_id.in_(warehouse_ids))
+
     subq = (
         select(
             Task.id,
@@ -158,7 +178,7 @@ async def get_tasks_unique_by_warehouse_and_box_type(
                 order_by=Task.coefficient.desc()
             ).label("rn")
         )
-        .where(Task.user_id == user_id)
+        .where(*filters)
         .subquery()
     )
 
@@ -171,6 +191,17 @@ async def get_tasks_unique_by_warehouse_and_box_type(
     result = await session.scalars(stmt)
     tasks: Sequence[Task] = result.all() # Объявляем ORM модель объекта Task
     return [TaskRead.model_validate(task) for task in tasks] # Превращаем из ORM в TaskRead
+
+async def get_tasks_by_user_and_wh(session: AsyncSession, user_id: int, warehouse_ids: list[int]) -> Sequence[TaskRead]:
+    """Все задачи, принадлежащие пользователю."""
+    filters = [Task.user_id == user_id]
+    if warehouse_ids:
+        filters.append(Task.warehouse_id.in_(warehouse_ids))
+
+    stmt = select(Task).where(*filters)
+    result = await session.scalars(stmt)
+    tasks: Sequence[Task] = result.all()  # Объявляем ORM модель объекта Task
+    return [TaskRead.model_validate(task) for task in tasks]  # Превращаем из ORM в TaskRead
 # ────────────────────────────────────────────────────────────────────────────
 
 

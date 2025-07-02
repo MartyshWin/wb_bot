@@ -17,7 +17,7 @@ controller = TaskResponse(inline_handler=inline)
 # Перенести всю логику создания задачи в отдельный модуль
 #----------------------------------------#----------------------------------------
 @router.callback_query(F.data.startswith('create_task'))
-async def create_task_handler(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
+async def create_task_handler(callback_query: CallbackQuery, state: FSMContext):
     await state.clear()
     data, user_lang = await parse_cq(callback_query)
 

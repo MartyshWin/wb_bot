@@ -1,6 +1,7 @@
 import logging
 from typing import Union, Sequence, Iterable
 
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 
@@ -43,6 +44,7 @@ async def template_callback(
             raise TypeError(f"template_callback: unsupported type {type(responses)!r}")
 
         if not resp_list:  # пусто → ничего не шлём
+            logging.warning("⚠️ template_callback получил пустой список ответов.")
             return
 
         # ── 3. первый ответ → edit_text ───────────────────────────────
@@ -53,12 +55,15 @@ async def template_callback(
 
         # ── 3.1. если popup (first) → показываем его ──────────────────────────────
         if first.popup_text:
-            await cq.answer(first.popup_text, show_alert=first.popup_alert)
+            # logging.info(f"🧨 Отправка (first-popup)==")
+            first_answer = await cq.answer(first.popup_text, show_alert=first.popup_alert)
         # -----------------------------
 
         if first.type_edit == "keyboard":  # только поменять КБ
+            # logging.info(f"⌨️ Отправка (first-edit_reply_markup)==")
             await cq.message.edit_reply_markup(reply_markup=kb)
-        else:  # полное редактирование
+        elif first.type_edit == "message":  # полное редактирование
+            # logging.info(f"💣 Отправка (fitst-edit_text)==")
             await cq.message.edit_text(first.text, reply_markup=kb)
 
         # ── 4. остальные ответы → новые сообщения -----------------------------
@@ -69,13 +74,20 @@ async def template_callback(
 
             # ── 4.1. если popup (other) → показываем его ──────────────────────────────
             if resp.popup_text:
+                # logging.info(f"🧨 Отправка (resp-popup)==")
                 await cq.answer(resp.popup_text, show_alert=resp.popup_alert)
+
+            if first.popup_text and not resp.popup_text:
+                # logging.info(f"💣 Отправка (edit_text -> resp)==")
+                await cq.message.edit_text(resp.text, reply_markup=kb)
 
             # если нужно редактировать КБ предыдущего сообщения,
             # а не создавать новое – проверяем type_edit
             if resp.type_edit == "keyboard":
+                # logging.info(f"⌨️ Отправка (edit_reply_markup)==")
                 await cq.message.edit_reply_markup(reply_markup=kb)
-            else:
+            elif first.type_edit == "message":  # полное редактирование
+                # logging.info(f"☄️ Отправка (answer)==")
                 await cq.message.answer(resp.text, reply_markup=kb)
     except Exception as e:
         logging.error(f"template_callback error: {e}", exc_info=True)

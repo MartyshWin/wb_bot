@@ -3,6 +3,7 @@ import json
 import re
 import shlex
 from itertools import batched
+from sys import prefix
 from typing import Union, Callable, List, Any, TypedDict, Optional, Iterable, Tuple, Sequence
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -420,13 +421,15 @@ class InlineKeyboardHandler:
     def box_type(
             self,
             data: ResponseBoxTypes,
-            box_titles: dict[str, str]
+            box_titles: dict[str, str],
+            url: str = 'box_type',
+            url_back: Optional[str] = None
     ) -> InlineKeyboardMarkup:
         # --- шорткаты и маркеры ----------------------------------------------------
-        selected = set(data.selected or [])  # отмеченные типы
+        selected = set(data.selected) or []  # отмеченные типы
         checked = {i: "🟢 " for i in (selected or {})}  # зелёная точка у выбранных
-        url = "box_type"
-        url_back = f"task_mode_{data.mode}"  # возвращает к выбору складов
+        if url_back is None:
+            url_back = f"task_mode_{data.mode}"  # возвращает к выбору складов
 
         # --- кнопки типов коробок --------------------------------------------------
         pairs: list[tuple[str, str]] = []
@@ -442,7 +445,8 @@ class InlineKeyboardHandler:
         tail: list[list[tuple[str, str]]] = []
 
         # confirm – показываем, если выбор есть и он отличается от дефолта
-        if selected and (data.box_default or []) != list(selected):
+        # print(set(data.box_default), selected)
+        if selected and list(set((data.box_default or []))) != list(selected):
             tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
 
         # назад
@@ -457,11 +461,13 @@ class InlineKeyboardHandler:
     def coefs(
             self,
             data: ResponseCoefs,
+            url: str = 'coefs',
+            url_back: Optional[str] = None
     ) -> InlineKeyboardMarkup:
         # --- шорткаты и маркеры --------------------------------------------------
         selected = data.selected                    # один-единственный int | None
-        url = "coefs"                               # префикс callback
-        url_back = f"task_mode_{data.mode}_confirm" # возвращает к выбору box-types
+        if url_back is None:
+            url_back = f"task_mode_{data.mode}_confirm" # возвращает к выбору box-types
 
         # --- кнопки коэффициентов (21 шт., по 3 в строке) -----------------------
         pairs: list[tuple[str, str]] = []
@@ -474,7 +480,7 @@ class InlineKeyboardHandler:
         tail: list[list[tuple[str, str]]] = []
 
         # confirm – если выбор есть и он отличается от дефолта
-        if selected is not None:
+        if selected is not None and data.coef_default != selected:
             tail.append([("Подтвердить выбор ✅", f"{url}_confirm")])
 
         back_cb = (
@@ -490,19 +496,12 @@ class InlineKeyboardHandler:
     # Выбор даты поставки (периода времени)
     def create_select_date(
             self,
-            back: bool = False,
-            warehouse_id: int = 0,
-            page: int = 0
+            url: str = 'select_date',
+            url_back: str = 'box_type_confirm',
+            url_calendar: str = 'select_diapason'
     ) -> InlineKeyboardMarkup:
         # --- шорткаты -----------------------------------------------------------
-        url = "select_date"  # базовый префикс
-        url_back = f"coefs_confirm"
         # f"task_update_select_{warehouse_id}_{page}"
-
-        back_cb = (  # callback «Назад»
-            url_back
-            if back else "confirm_box_type"
-        )
 
         # --- основные кнопки ----------------------------------------------------
         pairs: list[tuple[str, str]] = [
@@ -510,11 +509,11 @@ class InlineKeyboardHandler:
             ("Завтра", f"{url}_tomorrow"),
             ("Неделя", f"{url}_week"),
             ("Месяц", f"{url}_month"),
-            ("Выбрать на календаре", "select_diapason"),
+            ("Выбрать на календаре", url_calendar),
         ]
 
         # --- «хвост» (только кнопка «Назад») ------------------------------------
-        tail = [[("Назад ↩️", back_cb)]]
+        tail = [[("Назад ↩️", url_back)]]
 
         # --- сборка и возврат ----------------------------------------------------
         # row_width=2 → «Сегодня|Завтра», «Неделя|Месяц», «Календарь», «Назад»
@@ -523,6 +522,10 @@ class InlineKeyboardHandler:
     def create_alarm_list(
             self,
             page_data: ResponseTasks,
+            url: str = 'toggle_alarm',
+            prefix_icon: tuple[str, str] = ("🔔", "🔕"),
+            alarm_helper_btn: bool = True,
+            back: str = 'alarm_setting'
     ) -> InlineKeyboardMarkup:
         # --- данные из модели: Парсинг Pydantic модели --------------------------
         warehouses = page_data.warehouses_names_list
@@ -535,9 +538,9 @@ class InlineKeyboardHandler:
         for warehouse in warehouses:
             wid = warehouse["id"]
             name = warehouse["name"]
-            icon = "🔔" if alarm_status.get(wid) else "🔕"
+            icon = prefix_icon[0] if alarm_status.get(wid) else prefix_icon[1]
             label = f"{icon} {name}"
-            pairs.append((label, f"toggle_alarm_{wid}_{page}"))
+            pairs.append((label, f"{url}_{wid}_{page}"))
 
         # --- «хвост» (пагинация + действия + назад) ---------------------------------
         tail_rows: list[list[tuple[str, str]]] = []
@@ -552,11 +555,11 @@ class InlineKeyboardHandler:
         # if pagination:
         #     tail_rows.append(pagination)
 
-        if warehouses:
+        if warehouses and alarm_helper_btn:
             tail_rows.append([("Включить для всех", "alarm_all_on")])
             tail_rows.append([("Отключить для всех", "alarm_all_off")])
 
-        tail_rows.append([("Назад ↩️", "alarm_setting")])
+        tail_rows.append([("Назад ↩️", back)])
 
         # --- сборка -----------------------------------------------------------------
         return self.build_kb(pairs, row_width=2, tail_rows=tail_rows)
@@ -645,20 +648,20 @@ class InlineKeyboardHandler:
     ) -> InlineKeyboardMarkup:
          return self.build_inline_keyboard([
             [{
-                "text": "Изменить тип упаковки",
+                "text": "📦 Изменить тип упаковки",
                 "callback_data": f"task_update_box_{warehouse_id}_{page}"
             }],
             [{
-                "text": "Изменить коэффициент",
+                "text": "🧮 Изменить коэффициент",
                 "callback_data": f"task_update_coef_{warehouse_id}_{page}"
             }],
             [{
-                "text": "Изменить период",
+                "text": "📅 Изменить период",
                 "callback_data": f"task_update_date_{warehouse_id}_{page}"
             }],
             [{
-                "text": "Удалить задачу",
-                "callback_data": f"task_delete_{warehouse_id}_{page}"
+                "text": "🗑️ Удалить задачу",
+                "callback_data": f"task_delete_id{warehouse_id}_{page}"
             }],
             [{
                 "text": "Назад ↩️",
@@ -667,13 +670,16 @@ class InlineKeyboardHandler:
         ])
 
     @staticmethod
-
     def generate_calendar(
         *,
         year: int | None = None,  # выбранный год   (None → текущий)
         month: int | None = None,  # выбранный месяц (None → текущий)
         highlight_day: int | None = None,  # «выбранный» день (None → нет)
         confirm: bool = False,  # показать кнопку «Подтвердить выбор»
+        url: str = 'select_day',
+        url_confirm: str = 'date_confirm',
+        url_back: str = 'coefs_confirm',
+        url_change: str = 'change_month'
     ) -> InlineKeyboardMarkup:
         """
         Генерирует инлайн-календарь одного месяца.
@@ -726,7 +732,7 @@ class InlineKeyboardHandler:
                 row.append(
                     InlineKeyboardButton(
                         text=f"{mark}{day}{mark}",
-                        callback_data=f"select_day_{year}_{month}_{day}"
+                        callback_data=f"{url}_{year}_{month}_{day}"
                     )
                 )
             kb.append(row)
@@ -740,20 +746,20 @@ class InlineKeyboardHandler:
 
         # Нижний ряд кнопок: назад по месяцу, сегодня, вперёд по месяцу
         kb.append([
-            InlineKeyboardButton(text="⬅️", callback_data=f"change_month_{prev_y}_{prev_m}"),
+            InlineKeyboardButton(text="⬅️", callback_data=f"{url_change}_{prev_y}_{prev_m}"),
             InlineKeyboardButton(
                 text="Сегодня",
-                callback_data=f"select_day_{today.year}_{today.month}_{today.day}"
+                callback_data=f"{url}_{today.year}_{today.month}_{today.day}"
             ),
-            InlineKeyboardButton(text="➡️", callback_data=f"change_month_{next_y}_{next_m}"),
+            InlineKeyboardButton(text="➡️", callback_data=f"{url_change}_{next_y}_{next_m}"),
         ])
 
         # ── 4. confirm / back ----------------------------------------------
         if confirm:
-            kb.append([InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data="date_confirm")])
+            kb.append([InlineKeyboardButton(text="Подтвердить выбор ✅", callback_data=url_confirm)])
 
         # Кнопка "Назад"
-        kb.append([InlineKeyboardButton(text="Назад ↩️", callback_data="coefs_confirm")])
+        kb.append([InlineKeyboardButton(text="Назад ↩️", callback_data=url_back)])
 
         # ── 5. возврат -------------------------------------------------------
         return InlineKeyboardMarkup(inline_keyboard=kb)

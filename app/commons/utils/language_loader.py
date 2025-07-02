@@ -1,8 +1,10 @@
 import importlib
 from types import ModuleType
 
+from app.schemas.typed_dict import LangType
 
-def load_language(lang_code: str) -> dict[str, dict[str, str]]:
+
+def load_language(lang_code: str) -> LangType:
     """
     Загружает словарь языка по коду языка (например, 'ru', 'en').
 

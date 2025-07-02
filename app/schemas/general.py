@@ -41,14 +41,14 @@ class ResponseWarehouses(PaginationMixin):
 
 class ResponseTasks(PaginationMixin):
     tasks: list[TaskRead]
-    warehouses_names_list: Optional[list[dict[str, str | int]]] = None
+    warehouses_names_list: Optional[Union[list[dict[str, int | str]], list[WarehouseRead]]] = None
 
 class ResponseBoxTypes(BaseModel):
     selected: list[str] = Field(default_factory=list, description="Уже отмеченные типы")
     back: bool = Field(default=False, description="Пришли из режима редактирования")
     warehouse_id: int = Field(default=0, description="Бизнес-ID склада")
     page: int = Field(default=0, ge=0, description="Индекс текущей страницы")
-    box_default: Optional[list[int]] = Field(default=None, description="Типы по умолчанию из задачи")
+    box_default: Optional[list[str]] = Field(default=None, description="Типы по умолчанию из задачи")
     mode: TaskMode = Field(default=TaskMode.MASS, description="flex / mass")
 
 class ResponseCoefs(BaseModel):

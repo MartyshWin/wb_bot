@@ -15,7 +15,7 @@ controller = TaskResponse(inline_handler=inline)
 # Логика обновления типа короба
 #----------------------------------------#----------------------------------------
 @router.callback_query(F.data == "task_delete_confirm")
-async def delete_confirm_yes(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
+async def delete_confirm_yes(callback_query: CallbackQuery, state: FSMContext):
     """
     Обработчик подтверждения удаления всех задач.
 
@@ -44,7 +44,6 @@ async def delete_confirm_yes(callback_query: CallbackQuery, state: FSMContext) -
         data,
         state
     )
-
     await template_callback(callback_query, state, inline,
         responses=response
     )
@@ -52,7 +51,7 @@ async def delete_confirm_yes(callback_query: CallbackQuery, state: FSMContext) -
 # Логика удаления задачи в списке "Редактирования задач"
 #----------------------------------------#----------------------------------------
 @router.callback_query(F.data.startswith('task_delete_'))
-async def edit_task_box(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
+async def edit_task_box(callback_query: CallbackQuery, state: FSMContext):
     data, user_lang = await parse_cq(callback_query)
     response = await controller.delete_task(
         callback_query,
@@ -60,7 +59,6 @@ async def edit_task_box(callback_query: CallbackQuery, state: FSMContext) -> Non
         data,
         state
     )
-
     await template_callback(callback_query, state, inline,
         responses=response
     )

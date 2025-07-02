@@ -1,0 +1,1 @@
+LangType = dict[str, str | dict[str, str] | dict[str, dict[str, str]]]

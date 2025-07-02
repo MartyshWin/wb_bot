@@ -12,7 +12,7 @@ inline = InlineKeyboardHandler()
 
 #----------------------------------------#----------------------------------------
 @router.callback_query(F.data == 'main')
-async def main(callback_query: CallbackQuery, state: FSMContext) -> None | dict:
+async def main(callback_query: CallbackQuery, state: FSMContext): #  -> None | dict - убрал, нет вызова return, который что-то бы возвращал
     """
     Обработчик кнопки "Главное меню".
 

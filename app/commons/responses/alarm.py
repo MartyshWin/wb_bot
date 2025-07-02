@@ -21,16 +21,6 @@ class TaskAlarmResponse(BaseHandlerExtensions):
         super().__init__()
         self.task_service = TaskService()
         self.inline = inline_handler
-        self.task_state_template: dict[str, Any] = {
-            'current_page': 0,
-            'list': [],
-            'selected_list': [],
-            'box_type': [],
-            'coefs': None,
-            'period_start': None,
-            'period_end': None,
-            'mode': ''
-        }
 
 
     async def setup_notifications(
@@ -71,7 +61,7 @@ class TaskAlarmResponse(BaseHandlerExtensions):
             offset: int = 0 * self.limit_whs_per_page
 
             # ── 2. получение данных ─────────────────────────────
-            task_list_with_names = await self.task_service.get_user_uniq_task_alarm(user_id, self.limit_whs_per_page, offset)
+            task_list_with_names = await self.task_service.get_user_uniq_task_with_names(user_id, self.limit_whs_per_page, offset)
 
             # ── 3. Ответ пользователю  ─────────────────────────────
             return self.format_response(
